@@ -17,6 +17,7 @@ The Environmental Status Tracker for Brazil is a Python-based Streamlit applicat
 **Primary Dependencies**: 
 - **UI Framework**: Streamlit (interactive dashboards and web UI)
 - **LLM Orchestration**: LangGraph (conversational features, multi-turn dialogue, agentic workflows)
+- **Observability & Tracing**: Langfuse (LLM observability, cost tracking, latency monitoring for LangGraph workflows)
 - **Data Validation**: Pydantic v2 (data models and settings management)
 - **Data Processing**: Pandas, GeoPandas (environmental data manipulation)
 - **Geospatial**: Rasterio, GDAL/OGR (satellite imagery and geographic operations)
@@ -302,6 +303,8 @@ No violations to constitution or quality standards identified. Architecture alig
 │  │  - Multi-turn dialogue orchestration                        │ │
 │  │  - Intent extraction and context management                 │ │
 │  │  - Response generation with INPE data                       │ │
+│  │  - Langfuse tracing: cost tracking, latency monitoring      │ │
+│  │  - Observability middleware for all LLM calls               │ │
 │  └─────────────────────────────────────────────────────────────┘ │
 │  ┌──────────────────────┬──────────────────┬──────────────────┐ │
 │  │ Analysis Services    │ Trend Analyzer   │ Alert Generator  │ │
@@ -1015,13 +1018,49 @@ REDIS_URL=redis://localhost:6379
 CACHE_TTL_DEFAULT=3600
 ALERT_THRESHOLD_FIRES=100  # hotspots per 24h per region
 ALERT_THRESHOLD_DEFORESTATION=50  # % above 12-month avg
+
+# Langfuse Observability
+LANGFUSE_PUBLIC_KEY=pk_...
+LANGFUSE_SECRET_KEY=sk_...
+LANGFUSE_ENDPOINT=https://cloud.langfuse.com  # or self-hosted
 ```
 
 ### Monitoring & Logging
 
 - **Logging**: Python logging module with structured JSON output
-- **Metrics**: Track API response times, cache hit rates, error counts
-- **Alerts**: Alert on INPE API unavailability, high error rates
+- **Observability & Tracing with Langfuse**: 
+  - **LLM Call Tracking**: All OpenAI API calls traced with Langfuse SDK
+    - Cost tracking per conversation session and per user
+    - Latency monitoring for LM generations
+    - Input/output token counting
+    - Temperature and model configuration logging
+  
+  - **LangGraph Workflow Tracing**:
+    - Trace execution of conversation workflow nodes (parse_query, retrieve_data, generate_response)
+    - Monitor time spent in each node
+    - Track data flow through the conversation state graph
+    - Identify performance bottlenecks in multi-turn dialogues
+  
+  - **INPE API Integration Observability**:
+    - Track INPE API calls (endpoint, response time, error rates)
+    - Monitor cache hit/miss rates per data source
+    - Track rate limiting and backoff behavior
+  
+  - **User Session Analytics**:
+    - Conversation length and complexity metrics
+    - User query patterns and common tasks
+    - System response quality metrics (query interpretation accuracy)
+    - User satisfaction feedback correlation
+  
+  - **Dashboards & Alerts** (in Langfuse UI):
+    - Real-time LLM cost tracking
+    - Response latency heatmaps
+    - Error rate monitoring with alerts on > 5% error rate
+    - Cache performance dashboards
+    - Conversation funnel (queries → successful responses)
+
+- **Metrics**: Track API response times, cache hit rates, error counts, LLM token usage, conversation duration
+- **Alerts**: Alert on INPE API unavailability, high error rates, LLM cost anomalies, LangGraph workflow failures
 - **Data Freshness**: Monitor last update time from each INPE source
 
 ### Database Migrations
