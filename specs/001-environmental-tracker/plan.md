@@ -159,7 +159,8 @@ environment_tracker/
 │   ├── config/
 │   │   ├── __init__.py
 │   │   ├── settings.py                 # Pydantic settings: API keys, model config, thresholds
-│   │   └── constants.py                # Biomes, states, alert definitions
+│   │   ├── constants.py                # Biomes, states, alert definitions
+│   │   └── langfuse_config.py          # Langfuse SDK initialization and tracing wrapper
 │   │
 │   ├── models/                         # Pydantic data models
 │   │   ├── __init__.py
@@ -188,11 +189,12 @@ environment_tracker/
 │   │   │
 │   │   ├── conversation/
 │   │   │   ├── __init__.py
-│   │   │   ├── langgraph_engine.py     # LangGraph workflow orchestration
+│   │   │   ├── langgraph_engine.py     # LangGraph workflow orchestration with Langfuse tracing
 │   │   │   ├── query_parser.py         # Extract geographic context and intent from queries
 │   │   │   ├── response_generator.py   # Format INPE data for conversational responses
 │   │   │   ├── session_manager.py      # Conversation persistence and context maintenance
-│   │   │   └── prompts.py              # System prompts and examples for LLM
+│   │   │   ├── prompts.py              # System prompts and examples for LLM
+│   │   │   └── langfuse_wrapper.py     # Langfuse tracing decorators and context managers
 │   │   │
 │   │   └── data_export.py              # CSV/PDF export with proper INPE attribution
 │   │
@@ -503,6 +505,21 @@ No violations to constitution or quality standards identified. Architecture alig
   - Offer alternative queries if data unavailable
 - Few-shot examples for entity extraction (regions, biomes)
 
+**Langfuse Wrapper** (`langfuse_wrapper.py`)
+- Observability and tracing integration for LLM calls
+- Methods:
+  - `trace_llm_call()` - Decorator for OpenAI API calls, logs all inputs/outputs to Langfuse
+  - `trace_langgraph_node()` - Decorator for LangGraph node execution, measures node latency
+  - `get_langfuse_trace()` - Retrieve current trace context for nested calls
+  - `update_trace_metadata()` - Add custom metadata (user_id, query_type, region, biome)
+- Features:
+  - Automatic cost tracking (tokens per call, cumulative cost per session)
+  - Latency monitoring for each LLM generation and node execution
+  - Error tracing with stack traces
+  - User session correlation (maps Streamlit session_id to Langfuse trace_id)
+  - Performance monitoring of LangGraph workflows
+- Configuration: Reads from `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_ENDPOINT` environment variables
+
 #### 4. **UI Components** (`src/ui/`)
 
 **Pages**
@@ -619,17 +636,24 @@ No violations to constitution or quality standards identified. Architecture alig
 #### **Streamlit Integration**
 - Entry point: `src/app.py`
 - Multi-page app structure: `@st.Page()` decorators
-- Session state: Store current filters, conversation context
+- Session state: Store current filters, conversation context, Langfuse session ID
 - Caching: `@st.cache_data` for static geographic reference data
 - Async support: `asyncio` for non-blocking INPE API calls
 - Reactive updates: Streamlit re-runs on filter changes, new messages
+- **Langfuse Session Tracking**: Each user session generates a Langfuse session ID for tracking conversations across page reloads
 
 #### **LangGraph Integration**
 - State machine for conversation workflows
 - Graph definition: Nodes (parse_query, retrieve_data, generate_response, update_context), Edges (branching logic)
 - LLM calls: Integrated with OpenAI/compatible API
-- State persistence: Serializable ConversationSession objects
-- Error handling: Fallback nodes for API failures
+- **Langfuse Tracing Integration**:
+  - All LLM calls wrapped with Langfuse SDK for observability
+  - Automatic cost tracking (input/output tokens per call)
+  - Latency monitoring for each LangGraph node execution
+  - Input/output token counting and cost calculation
+  - Trace chain visualization for debugging multi-turn conversations
+- State persistence: Serializable ConversationSession objects with Langfuse session IDs
+- Error handling: Fallback nodes for API failures with error tracing
 
 #### **Pydantic Integration**
 - All data models use Pydantic v2
@@ -655,6 +679,7 @@ No violations to constitution or quality standards identified. Architecture alig
 - Investigate INPE API documentation (DETER, PRODES, FOGO)
 - Determine current API access methods (REST, data downloads, authentication)
 - Research Streamlit + LangGraph integration patterns
+- Research Langfuse integration with LangGraph and OpenAI API
 - Explore geospatial library best practices (GeoPandas, Folium)
 - Document PostgreSQL + PostGIS setup for production
 
@@ -662,8 +687,10 @@ No violations to constitution or quality standards identified. Architecture alig
 1. INPE API specifications (exact endpoints, rate limits, authentication, response formats)
 2. INPE historical data availability (24+ months, granularity, update frequency)
 3. LangGraph best practices for environmental domain context management
-4. Streamlit performance optimization with 10k+ map markers
-5. Geographic reference data sources (accurate state/biome boundaries)
+4. Langfuse SDK integration patterns with LangGraph workflows
+5. Streamlit performance optimization with 10k+ map markers
+6. Geographic reference data sources (accurate state/biome boundaries)
+7. Langfuse cost tracking and latency monitoring best practices for LLM applications
 
 ### Phase 1: Design & Contracts (2-3 weeks)
 **Prerequisites**: Phase 0 research complete
@@ -742,12 +769,18 @@ No violations to constitution or quality standards identified. Architecture alig
   - Session manager for conversation history
   - Conversation page in Streamlit
   - System prompts and few-shot examples
+  - Implement Langfuse SDK initialization (`langfuse_config.py`)
+  - Add Langfuse tracing to all LLM calls (OpenAI integration)
+  - Implement `langfuse_wrapper.py` with tracing decorators
+  - Add Langfuse session tracking to Streamlit session state
 
 **Deliverables**:
 - Multi-turn conversations work end-to-end
 - Geographic context extraction from queries
 - INPE data properly cited in responses
 - Dashboard + conversation pages integrated
+- **Langfuse observability active**: All LLM calls are traced and visible in Langfuse dashboard
+- Cost and latency tracking working
 
 #### **Sprint 4: Visualization & UX Polish (2 weeks)**
 - Dependencies: Core features working
@@ -771,15 +804,23 @@ No violations to constitution or quality standards identified. Architecture alig
   - Contract tests for all INPE integrations
   - End-to-end test scenarios matching user stories
   - Performance testing (concurrent conversations, API response times)
-  - Documentation (architecture, deployment, data definitions)
-  - Security review (API key handling, data validation)
-  - Load testing with 50+ concurrent users
+  - **Langfuse observability verification**:
+    - Verify all LLM calls are traced in Langfuse
+    - Validate cost calculations (token counting accuracy)
+    - Verify latency tracking and node execution times
+    - Test Langfuse session correlation with Streamlit sessions
+    - Performance benchmarking with Langfuse overhead measurement
+  - Documentation (architecture, deployment, data definitions, Langfuse setup)
+  - Security review (API key handling, data validation, Langfuse credentials)
+  - Load testing with 50+ concurrent users and Langfuse monitoring
 
 **Deliverables**:
 - >80% test coverage across all modules
 - Performance verified against success criteria
-- Complete documentation of features and APIs
+- Complete documentation of features, APIs, and Langfuse observability
 - Security recommendations documented
+- **Langfuse dashboards**: Cost tracking, latency monitoring, error rate dashboards configured
+- Langfuse alert rules set up (e.g., alert on >5% error rate)
 
 ---
 
