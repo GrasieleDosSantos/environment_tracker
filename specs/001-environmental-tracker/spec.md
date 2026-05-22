@@ -238,7 +238,7 @@ The system must reliably access and integrate data from multiple INPE monitoring
 
 ## Assumptions
 
-- **INPE Data Access**: The system can reliably access INPE monitoring data through available APIs, data feeds, or scheduled downloads. Data is available in processable formats (JSON, CSV, GeoTIFF, or shapefiles).
+- **INPE Data Access**: The system can reliably access INPE monitoring data through TerraBrasilis (INPE's data platform, which exposes OGC WFS/WMS services and REST APIs for DETER and PRODES) and/or direct INPE data feeds or scheduled bulk downloads. Data is available in processable formats (JSON, CSV, GeoTIFF, or shapefiles). The exact access method for each data source (REST vs. WFS/WMS vs. file download) must be confirmed during Phase 0 research, as it affects the integration architecture.
 
 - **Users Have Internet Connectivity**: Target users have stable, reasonably fast internet connections (minimum 1 Mbps). Offline functionality is out of scope for v1.
 

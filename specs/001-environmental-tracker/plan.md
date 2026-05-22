@@ -71,7 +71,7 @@ The Environmental Status Tracker for Brazil is a Python-based Streamlit applicat
 - Progressive disclosure through dashboard filtering and map drill-down
 
 ✅ **Accessibility and Transparency** (Principle 3)
-- Bilingual support (Portuguese + English) via LLM prompts
+- Portuguese-first bilingual support (Portuguese as UI/prompt default, English fully supported) via LLM prompts
 - Documentation of all INPE data formats and processing logic
 - Data freshness timestamps visible on all UI elements
 
@@ -79,6 +79,7 @@ The Environmental Status Tracker for Brazil is a Python-based Streamlit applicat
 - Modular architecture (services, models, interfaces layers)
 - Pydantic models provide clear schemas for all data structures
 - Service layer abstraction for INPE integrations enables easy addition of new sources
+- `LLMProvider` abstraction layer enables switching between OpenAI, Claude, or local models without touching service code
 
 ### Quality Standards Alignment
 
@@ -172,6 +173,7 @@ environment_tracker/
 │   │
 │   ├── services/                       # Business logic services
 │   │   ├── __init__.py
+│   │   ├── llm_provider.py             # LLMProvider abstraction (OpenAI, Claude, local)
 │   │   ├── inpe_integration/
 │   │   │   ├── __init__.py
 │   │   │   ├── base.py                 # BaseINPEClient with rate limiting, caching
@@ -499,11 +501,12 @@ No violations to constitution or quality standards identified. Architecture alig
 **Prompts** (`prompts.py`)
 - System prompt guidelines:
   - Always cite INPE data
-  - Use Portuguese if user queries in Portuguese
+  - **Default to Portuguese**; switch to English only when the user writes in English — auto-detect language per message
   - Include data freshness warnings if data >12 hours old
   - Acknowledge data limitations transparently
   - Offer alternative queries if data unavailable
-- Few-shot examples for entity extraction (regions, biomes)
+- Few-shot examples for entity extraction written in Portuguese (with English equivalents)
+- UI labels, error messages, and status indicators default to Portuguese
 
 **Langfuse Wrapper** (`langfuse_wrapper.py`)
 - Observability and tracing integration for LLM calls
@@ -677,16 +680,17 @@ No violations to constitution or quality standards identified. Architecture alig
 ### Phase 0: Research (2-3 weeks)
 **Outputs**: `research.md` (resolve all NEEDS CLARIFICATION)
 - Investigate INPE API documentation (DETER, PRODES, FOGO)
-- Determine current API access methods (REST, data downloads, authentication)
-- Research Streamlit + LangGraph integration patterns
+- **Investigate TerraBrasilis** (INPE's data platform at terrabrasilis.dpi.inpe.br) — it exposes OGC WFS/WMS services and REST APIs for DETER and PRODES; some datasets may only be available as bulk file downloads (GeoTIFF, Shapefile) rather than traditional REST endpoints. Actual access method will influence client architecture.
+- Determine current API access methods (REST, TerraBrasilis WFS/WMS, bulk downloads, authentication)
+- Research Streamlit + LangGraph integration patterns; evaluate whether a simpler `ConversationService` class suffices for MVP before committing to LangGraph (see Sprint 3 trade-off note)
 - Research Langfuse integration with LangGraph and OpenAI API
 - Explore geospatial library best practices (GeoPandas, Folium)
 - Document PostgreSQL + PostGIS setup for production
 
 **Unknowns to Research**
-1. INPE API specifications (exact endpoints, rate limits, authentication, response formats)
+1. INPE/TerraBrasilis API specifications (exact endpoints, rate limits, authentication, response formats — REST vs. WFS/WMS vs. file download)
 2. INPE historical data availability (24+ months, granularity, update frequency)
-3. LangGraph best practices for environmental domain context management
+3. LangGraph best practices for environmental domain context management; assess complexity vs. simpler conversation loop for MVP
 4. Langfuse SDK integration patterns with LangGraph workflows
 5. Streamlit performance optimization with 10k+ map markers
 6. Geographic reference data sources (accurate state/biome boundaries)
@@ -734,6 +738,7 @@ No violations to constitution or quality standards identified. Architecture alig
 - Tasks:
   - Set up project structure (directories, dependencies in `pyproject.toml`)
   - Create Pydantic models and validation
+  - **Implement `LLMProvider` abstraction** (`services/llm_provider.py`) with concrete implementations for OpenAI and a stub for future providers (Claude, local LLaMA); all conversation and analysis services call `LLMProvider`, never the SDK directly
   - Implement BaseINPEClient with rate limiting, retry logic, caching
   - Implement DETER client + unit tests
   - Implement PRODES client + unit tests
@@ -762,9 +767,12 @@ No violations to constitution or quality standards identified. Architecture alig
 
 #### **Sprint 3: Conversational Engine (2 weeks)**
 - Dependencies: Dashboard foundation, INPE integration solid
+
+> **LangGraph trade-off**: LangGraph is the target architecture for multi-step branching dialogues, but it adds meaningful complexity (state graphs, node wiring, Langfuse integration) that may not pay off for MVP-level linear conversations (query → fetch → respond). Start Sprint 3 by implementing a simple `ConversationService` loop; introduce LangGraph only if multi-step clarification flows or parallel data-retrieval branches are needed during this sprint. This avoids over-engineering while keeping the path open.
+
 - Tasks:
   - Implement query parser (LLM-based or hybrid)
-  - Create LangGraph conversation workflow
+  - Start with simple `ConversationService` (message history + `LLMProvider` call); upgrade to LangGraph conversation workflow if branching logic is required
   - Implement response generator with INPE data formatting
   - Session manager for conversation history
   - Conversation page in Streamlit
@@ -813,6 +821,7 @@ No violations to constitution or quality standards identified. Architecture alig
   - Documentation (architecture, deployment, data definitions, Langfuse setup)
   - Security review (API key handling, data validation, Langfuse credentials)
   - Load testing with 50+ concurrent users and Langfuse monitoring
+  - **Profile per-session memory**: each Streamlit session holding LangGraph state can be memory-heavy; measure and set a session memory ceiling before go-live
 
 **Deliverables**:
 - >80% test coverage across all modules
@@ -1106,9 +1115,9 @@ LANGFUSE_ENDPOINT=https://cloud.langfuse.com  # or self-hosted
 
 ### Database Migrations
 
-- Schema versioning with migration scripts
-- Initial schema: `schema.sql` (included in repo)
-- Migrations: Alembic or manual versioning
+- Schema versioning with Alembic from day one (avoids retrofitting later)
+- Initial schema generated via `alembic revision --autogenerate` from SQLAlchemy models
+- Migrations tracked in `alembic/versions/` and committed to the repo
 - Backup strategy: Automated PostgreSQL backups (AWS RDS, managed services)
 
 ### Security Considerations
