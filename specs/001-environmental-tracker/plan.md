@@ -25,6 +25,7 @@ The Environmental Status Tracker for Brazil is a Python-based Streamlit applicat
 - **API Integration**: HTTPX (async HTTP client for INPE service integration)
 - **LLM Provider**: OpenAI API or compatible (configurable via environment)
 - **Caching**: Redis or SQLite-based (performance optimization for API responses)
+- **Local Dev Services**: Docker Compose (optional — spins up PostgreSQL+PostGIS and Redis for prod-parity local development; default dev path still uses SQLite via `uv sync` only)
 
 **Storage**: 
 - **Development/MVP**: SQLite for local environmental data cache and conversation history
@@ -269,7 +270,8 @@ environment_tracker/
 ├── uv.lock                             # Locked dependency versions
 ├── .env.example                        # Environment template (API keys, settings)
 ├── .streamlit/config.toml              # Streamlit configuration
-├── Makefile                            # Development commands
+├── docker-compose.yml                  # Optional: PostgreSQL+PostGIS, Redis, Langfuse for local dev
+├── Makefile                            # Development commands (make run, make services-up/down)
 └── README.md                           # Project overview for developers
 ```
 
@@ -1006,17 +1008,27 @@ INPE API Request
 
 ### Development Environment
 
-```
-# Install dependencies
+**Default path (SQLite — no services needed):**
+```bash
 uv sync
-
-# Create .env file
 cp .env.example .env
-# Configure: OPENAI_API_KEY, INPE_API_KEY (if required), DATABASE_URL
-
-# Run locally
+# Configure: OPENAI_API_KEY, LANGFUSE_* keys
 uv run streamlit run src/app.py
 ```
+
+**Prod-parity path (PostgreSQL+PostGIS + Redis via Docker Compose):**
+```bash
+docker compose up -d        # starts postgres, redis, langfuse (optional profile)
+cp .env.example .env
+# Set DATABASE_URL=postgresql://... and REDIS_URL=redis://...
+uv sync
+uv run streamlit run src/app.py
+```
+
+`docker-compose.yml` defines three services:
+- **postgres**: `postgis/postgis:15-3.4` image — PostGIS-enabled PostgreSQL
+- **redis**: `redis:7-alpine` — lightweight cache layer
+- **langfuse** *(optional profile `--profile langfuse`)*: self-hosted Langfuse server for developers who prefer not to use Langfuse Cloud
 
 ### Production Deployment
 
