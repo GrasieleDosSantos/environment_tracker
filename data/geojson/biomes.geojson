@@ -1,0 +1,66 @@
+{
+  "_comment": "Brazilian biome boundaries. Download authoritative polygons from IBGE: https://www.ibge.gov.br/geociencias/informacoes-ambientais/estudos-ambientais/15842-biomas.html or TerraBrasilis. This placeholder preserves the expected file path and schema. Each Feature must have properties.id (biome_id) and properties.name (Portuguese name).",
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "amazonia",
+        "name": "Amazônia",
+        "name_en": "Amazon",
+        "area_km2": 4196943
+      },
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "cerrado",
+        "name": "Cerrado",
+        "name_en": "Cerrado",
+        "area_km2": 2036448
+      },
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "caatinga",
+        "name": "Caatinga",
+        "name_en": "Caatinga",
+        "area_km2": 844453
+      },
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mata_atlantica",
+        "name": "Mata Atlântica",
+        "name_en": "Atlantic Forest",
+        "area_km2": 1110182
+      },
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "pantanal",
+        "name": "Pantanal",
+        "name_en": "Pantanal",
+        "area_km2": 150355
+      },
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "pampa",
+        "name": "Pampa",
+        "name_en": "Pampas",
+        "area_km2": 176496
+      },
+      "geometry": null
+    }
+  ]
+}

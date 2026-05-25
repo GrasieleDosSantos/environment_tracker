@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: env_tracker_postgres
+    environment:
+      POSTGRES_USER: envtracker
+      POSTGRES_PASSWORD: envtracker
+      POSTGRES_DB: environment_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U envtracker -d environment_tracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: env_tracker_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: self-hosted Langfuse — start with: docker compose --profile langfuse up -d
+  langfuse-server:
+    image: langfuse/langfuse:latest
+    container_name: env_tracker_langfuse
+    profiles:
+      - langfuse
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://envtracker:envtracker@postgres:5432/langfuse
+      NEXTAUTH_SECRET: replace-with-random-secret
+      SALT: replace-with-random-salt
+      NEXTAUTH_URL: http://localhost:3000
+      TELEMETRY_ENABLED: "false"
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

@@ -1,0 +1,33 @@
+{
+  "_comment": "Brazilian state boundaries. Download authoritative polygons from IBGE Malha de Estados: https://www.ibge.gov.br/geociencias/downloads-geociencias.html or via GeoPandas with 'naturalearth_lowres'. This placeholder preserves the expected file path and schema. Each Feature must have properties.code (ISO 3166-2 state code) and properties.name (Portuguese name).",
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "properties": { "code": "AC", "name": "Acre" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "AL", "name": "Alagoas" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "AP", "name": "Amapá" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "AM", "name": "Amazonas" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "BA", "name": "Bahia" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "CE", "name": "Ceará" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "DF", "name": "Distrito Federal" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "ES", "name": "Espírito Santo" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "GO", "name": "Goiás" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "MA", "name": "Maranhão" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "MT", "name": "Mato Grosso" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "MS", "name": "Mato Grosso do Sul" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "MG", "name": "Minas Gerais" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "PA", "name": "Pará" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "PB", "name": "Paraíba" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "PR", "name": "Paraná" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "PE", "name": "Pernambuco" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "PI", "name": "Piauí" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "RJ", "name": "Rio de Janeiro" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "RN", "name": "Rio Grande do Norte" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "RS", "name": "Rio Grande do Sul" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "RO", "name": "Rondônia" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "RR", "name": "Roraima" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "SC", "name": "Santa Catarina" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "SP", "name": "São Paulo" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "SE", "name": "Sergipe" }, "geometry": null },
+    { "type": "Feature", "properties": { "code": "TO", "name": "Tocantins" }, "geometry": null }
+  ]
+}

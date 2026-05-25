@@ -18,13 +18,13 @@
 
 **Purpose**: Initialize the project with uv, create the directory structure, and configure tooling.
 
-- [ ] T001 Initialize uv project: create `pyproject.toml` with all dependencies from plan.md (streamlit, langgraph, langfuse, pydantic, pandas, geopandas, rasterio, gdal, plotly, folium, httpx, openai, sqlalchemy, alembic, pytest, redis)
-- [ ] T002 Create full source directory structure per plan.md: `src/`, `tests/unit/`, `tests/integration/`, `tests/contract/`, `data/geojson/`, `data/reference/`, `alembic/versions/`
-- [ ] T003 [P] Create `.env.example` with all required variables: OPENAI_API_KEY, OPENAI_MODEL, INPE_DETER_ENDPOINT, INPE_PRODES_ENDPOINT, INPE_FOGO_ENDPOINT, DATABASE_URL, REDIS_URL, CACHE_TTL_DEFAULT, ALERT_THRESHOLD_FIRES, ALERT_THRESHOLD_DEFORESTATION, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_ENDPOINT
-- [ ] T004 [P] Create `docker-compose.yml` with three services: `postgres` (`postgis/postgis:15-3.4`, port 5432, volume `pgdata`), `redis` (`redis:7-alpine`, port 6379), and `langfuse` (official image, optional profile `--profile langfuse`); default dev path (SQLite) remains functional without Docker
-- [ ] T005 [P] Add `uv run` command reference to `README.md`: app start, tests, migrations, linting, and Docker Compose service commands — no Makefile needed
-- [ ] T006 [P] Create `.streamlit/config.toml` with server and theme configuration
-- [ ] T007 [P] Create `.gitignore` covering Python (`__pycache__/`, `.venv/`, `*.pyc`), environment files (`.env`), database files (`*.db`), geospatial data caches, and Docker volumes
+- [X] T001 Initialize uv project: create `pyproject.toml` with all dependencies from plan.md (streamlit, langgraph, langfuse, pydantic, pandas, geopandas, rasterio, gdal, plotly, folium, httpx, openai, sqlalchemy, alembic, pytest, redis)
+- [X] T002 Create full source directory structure per plan.md: `src/`, `tests/unit/`, `tests/integration/`, `tests/contract/`, `data/geojson/`, `data/reference/`, `alembic/versions/`
+- [X] T003 [P] Create `.env.example` with all required variables: OPENAI_API_KEY, OPENAI_MODEL, INPE_DETER_ENDPOINT, INPE_PRODES_ENDPOINT, INPE_FOGO_ENDPOINT, DATABASE_URL, REDIS_URL, CACHE_TTL_DEFAULT, ALERT_THRESHOLD_FIRES, ALERT_THRESHOLD_DEFORESTATION, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_ENDPOINT
+- [X] T004 [P] Create `docker-compose.yml` with three services: `postgres` (`postgis/postgis:15-3.4`, port 5432, volume `pgdata`), `redis` (`redis:7-alpine`, port 6379), and `langfuse` (official image, optional profile `--profile langfuse`); default dev path (SQLite) remains functional without Docker
+- [X] T005 [P] Add `uv run` command reference to `README.md`: app start, tests, migrations, linting, and Docker Compose service commands — no Makefile needed
+- [X] T006 [P] Create `.streamlit/config.toml` with server and theme configuration
+- [X] T007 [P] Create `.gitignore` covering Python (`__pycache__/`, `.venv/`, `*.pyc`), environment files (`.env`), database files (`*.db`), geospatial data caches, and Docker volumes
 
 ---
 
@@ -34,23 +34,23 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T008 Create `src/config/settings.py` with Pydantic `BaseSettings`: API keys, model config, rate limits, alert thresholds, cache TTLs, database URL
-- [ ] T009 [P] Create `src/config/constants.py` with Brazilian biomes list, state codes, alert severity levels, INPE data type enums
-- [ ] T010 Create `src/utils/logging.py` with structured JSON logging and request-context fields
-- [ ] T011 [P] Create `src/utils/date_utils.py` with date range parsing, relative date resolution ("last 30 days"), and Brazil timezone handling
-- [ ] T012 [P] Create `src/utils/geo_utils.py` with coordinate transformation helpers and Brazil bounding box constants
-- [ ] T013 [P] Create `src/utils/decorators.py` with `@retry`, `@cache_result`, and `@async_safe` decorators
-- [ ] T014 Create `src/models/geographic.py` with Pydantic models: `GeographicRegion`, `Biome`, `Coordinates`, `BoundingBox`
-- [ ] T015 [P] Create `src/models/environmental.py` with `EnvironmentalAlert`, `EnvironmentalDataPoint`, `AlertThreshold`
-- [ ] T016 [P] Create `src/models/timeseries.py` with `TimeSeriesData`, `TrendInfo`
-- [ ] T017 [P] Create `src/models/conversation.py` with `ConversationSession`, `ConversationMessage`, `ContextData`
-- [ ] T018 [P] Create `src/models/validation.py` with custom Pydantic validators: INPE coordinate ranges, date range bounds, biome/state reference validation
-- [ ] T019 Create `src/database/connection.py` with SQLite (dev) and PostgreSQL (prod) connection management using SQLAlchemy engine factory
-- [ ] T020 Create `src/database/models.py` with SQLAlchemy ORM models matching the Pydantic schemas in T014–T017 (conversation_sessions, environmental_data_cache, alerts tables)
-- [ ] T021 Create `src/database/queries.py` with prepared queries for session retrieval, cache lookup, and alert fetching
-- [ ] T022 Initialize Alembic: `alembic init alembic`, configure `alembic.ini` and `alembic/env.py` to use `src/database/models.py`; generate initial migration with `alembic revision --autogenerate -m "initial schema"`
-- [ ] T023 Load geographic reference data: source and place `data/geojson/biomes.geojson` (6 Brazilian biomes), `data/geojson/states.geojson` (27 states), `data/reference/geographic_reference.json` (state codes, biome mappings)
-- [ ] T024 Create `src/app.py` as the Streamlit entry point skeleton: multi-page structure with `st.navigation()`, empty page stubs for all 6 pages, session state initialization
+- [X] T008 Create `src/config/settings.py` with Pydantic `BaseSettings`: API keys, model config, rate limits, alert thresholds, cache TTLs, database URL
+- [X] T009 [P] Create `src/config/constants.py` with Brazilian biomes list, state codes, alert severity levels, INPE data type enums
+- [X] T010 Create `src/utils/logging.py` with structured JSON logging and request-context fields
+- [X] T011 [P] Create `src/utils/date_utils.py` with date range parsing, relative date resolution ("last 30 days"), and Brazil timezone handling
+- [X] T012 [P] Create `src/utils/geo_utils.py` with coordinate transformation helpers and Brazil bounding box constants
+- [X] T013 [P] Create `src/utils/decorators.py` with `@retry`, `@cache_result`, and `@async_safe` decorators
+- [X] T014 Create `src/models/geographic.py` with Pydantic models: `GeographicRegion`, `Biome`, `Coordinates`, `BoundingBox`
+- [X] T015 [P] Create `src/models/environmental.py` with `EnvironmentalAlert`, `EnvironmentalDataPoint`, `AlertThreshold`
+- [X] T016 [P] Create `src/models/timeseries.py` with `TimeSeriesData`, `TrendInfo`
+- [X] T017 [P] Create `src/models/conversation.py` with `ConversationSession`, `ConversationMessage`, `ContextData`
+- [X] T018 [P] Create `src/models/validation.py` with custom Pydantic validators: INPE coordinate ranges, date range bounds, biome/state reference validation
+- [X] T019 Create `src/database/connection.py` with SQLite (dev) and PostgreSQL (prod) connection management using SQLAlchemy engine factory
+- [X] T020 Create `src/database/models.py` with SQLAlchemy ORM models matching the Pydantic schemas in T014–T017 (conversation_sessions, environmental_data_cache, alerts tables)
+- [X] T021 Create `src/database/queries.py` with prepared queries for session retrieval, cache lookup, and alert fetching
+- [X] T022 Initialize Alembic: `alembic init alembic`, configure `alembic.ini` and `alembic/env.py` to use `src/database/models.py`; generate initial migration with `alembic revision --autogenerate -m "initial schema"`
+- [X] T023 Load geographic reference data: source and place `data/geojson/biomes.geojson` (6 Brazilian biomes), `data/geojson/states.geojson` (27 states), `data/reference/geographic_reference.json` (state codes, biome mappings)
+- [X] T024 Create `src/app.py` as the Streamlit entry point skeleton: multi-page structure with `st.navigation()`, empty page stubs for all 6 pages, session state initialization
 
 **Checkpoint**: Foundation ready — all models, DB connection, and utilities available. User story implementation can now begin.
 
