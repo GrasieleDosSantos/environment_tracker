@@ -22,7 +22,7 @@
 - [ ] T002 Create full source directory structure per plan.md: `src/`, `tests/unit/`, `tests/integration/`, `tests/contract/`, `data/geojson/`, `data/reference/`, `alembic/versions/`
 - [ ] T003 [P] Create `.env.example` with all required variables: OPENAI_API_KEY, OPENAI_MODEL, INPE_DETER_ENDPOINT, INPE_PRODES_ENDPOINT, INPE_FOGO_ENDPOINT, DATABASE_URL, REDIS_URL, CACHE_TTL_DEFAULT, ALERT_THRESHOLD_FIRES, ALERT_THRESHOLD_DEFORESTATION, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_ENDPOINT
 - [ ] T004 [P] Create `docker-compose.yml` with three services: `postgres` (`postgis/postgis:15-3.4`, port 5432, volume `pgdata`), `redis` (`redis:7-alpine`, port 6379), and `langfuse` (official image, optional profile `--profile langfuse`); default dev path (SQLite) remains functional without Docker
-- [ ] T005 [P] Create `Makefile` with commands: `make run` (`uv run streamlit run src/app.py`), `make services-up` (`docker compose up -d`), `make services-down` (`docker compose down`), `make test`, `make lint`, `make db-migrate`, `make db-upgrade`
+- [ ] T005 [P] Add `uv run` command reference to `README.md`: app start, tests, migrations, linting, and Docker Compose service commands — no Makefile needed
 - [ ] T006 [P] Create `.streamlit/config.toml` with server and theme configuration
 - [ ] T007 [P] Create `.gitignore` covering Python (`__pycache__/`, `.venv/`, `*.pyc`), environment files (`.env`), database files (`*.db`), geospatial data caches, and Docker volumes
 
@@ -170,7 +170,7 @@
 - [ ] T055 Update `src/app.py` to wire all 6 pages into `st.navigation()`: Conversation, Dashboard, Map, Alerts, Trends, About — with Portuguese page labels
 - [ ] T056 [P] Apply `@st.cache_data(ttl=3600)` to all static geographic data loads in `geospatial.py` and `map.py`; profile map rendering with 10,000+ markers and confirm no degradation
 - [ ] T057 [P] Security hardening: audit that no API keys are logged, all INPE responses pass Pydantic validation before use, rate limiter in `BaseINPEClient` tested under load
-- [ ] T058 [P] Write `README.md` covering project overview, local setup (default SQLite path and Docker Compose prod-parity path), environment configuration, architecture diagram reference
+- [ ] T058 [P] Write `README.md` covering project overview, local setup (default SQLite path and Docker Compose prod-parity path), full `uv run` command reference, environment configuration, architecture diagram reference
 - [ ] T059 Run end-to-end validation: `uv sync` → configure `.env` → `alembic upgrade head` → `streamlit run src/app.py`; verify all 6 pages load; verify INPE data appears with freshness badge; verify Portuguese conversation round-trip
 
 ---

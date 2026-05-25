@@ -271,8 +271,7 @@ environment_tracker/
 ├── .env.example                        # Environment template (API keys, settings)
 ├── .streamlit/config.toml              # Streamlit configuration
 ├── docker-compose.yml                  # Optional: PostgreSQL+PostGIS, Redis, Langfuse for local dev
-├── Makefile                            # Development commands (make run, make services-up/down)
-└── README.md                           # Project overview for developers
+└── README.md                           # Project overview for developers (includes uv run command reference)
 ```
 
 **Structure Decision**: Selected Option 1 (Single project) as the Streamlit application is a cohesive unit with UI and backend tightly integrated. Clear separation achieved through layered architecture (models, services, ui, database) rather than separate projects. All components share the same Python environment managed by `uv`.
@@ -669,10 +668,13 @@ No violations to constitution or quality standards identified. Architecture alig
 
 #### **uv Package Manager**
 - `pyproject.toml`: Project metadata, dependency specification
-- Commands:
-  - `uv sync` - Install dependencies
-  - `uv run` - Execute scripts
-  - `uv pip` - pip-compatible commands for troubleshooting
+- No Makefile — all workflows use `uv run` directly:
+  - `uv sync` — install dependencies
+  - `uv run streamlit run src/app.py` — start the app
+  - `uv run pytest` — run tests
+  - `uv run alembic upgrade head` — apply database migrations
+  - `uv run alembic revision --autogenerate -m "..."` — generate a new migration
+  - `docker compose up -d` — start local services (PostgreSQL, Redis; no uv wrapper needed)
 - Dependency groups: main, dev, test
 
 ---
@@ -1013,6 +1015,7 @@ INPE API Request
 uv sync
 cp .env.example .env
 # Configure: OPENAI_API_KEY, LANGFUSE_* keys
+uv run alembic upgrade head
 uv run streamlit run src/app.py
 ```
 
@@ -1022,6 +1025,7 @@ docker compose up -d        # starts postgres, redis, langfuse (optional profile
 cp .env.example .env
 # Set DATABASE_URL=postgresql://... and REDIS_URL=redis://...
 uv sync
+uv run alembic upgrade head
 uv run streamlit run src/app.py
 ```
 
