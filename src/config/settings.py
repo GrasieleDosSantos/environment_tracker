@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     # Langfuse
     langfuse_public_key: str = Field(default="")
     langfuse_secret_key: str = Field(default="")
-    langfuse_endpoint: str = Field(default="https://cloud.langfuse.com")
+    langfuse_host: str = Field(default="https://cloud.langfuse.com")
 
     # App
     data_freshness_warning_hours: int = Field(

@@ -14,6 +14,27 @@
 
 ---
 
+## Phase 0: Research
+
+**Purpose**: Resolve all unknowns before Phase 3 (INPE integration) begins. Output is `specs/001-environmental-tracker/research.md`.
+
+**⚠️ CRITICAL**: Phase 3 (US7) cannot start until T000–T006b are complete — the INPE client architecture depends on confirmed API access methods.
+
+> Phase 1 and Phase 2 (infrastructure only) can proceed in parallel with Phase 0 research, since they make no INPE API calls.
+
+- [X] T000 Create `specs/001-environmental-tracker/research.md` as the working document for all findings below
+- [X] T000a [P] Research TerraBrasilis platform (terrabrasilis.dpi.inpe.br): confirm available OGC WFS/WMS endpoints for DETER and PRODES; determine whether REST or WFS/WMS is the correct access method; document authentication requirements and rate limits; update `INPE_DETER_ENDPOINT` and `INPE_PRODES_ENDPOINT` in `.env.example` with confirmed values
+- [X] T000b [P] Research INPE FOGO / BDQueimadas: confirm endpoint for current hotspot data; document satellite sources (MODIS, VIIRS), update frequency, and authentication; update `INPE_FOGO_ENDPOINT` in `.env.example`
+- [X] T000c [P] Research INPE historical data availability: confirm 24+ months of data is queryable for DETER, PRODES, and FOGO; document granularity (daily/monthly), any data gaps, and bulk download options (GeoTIFF/Shapefile) vs. API queries
+- [X] T000d [P] Research `ConversationService` async patterns under Streamlit: confirm how to run async INPE calls from Streamlit's synchronous execution model; document session memory footprint for 50+ concurrent users; record findings relevant to T046
+- [X] T000e [P] Research Langfuse SDK integration with plain OpenAI API calls (no LangGraph): confirm `langfuse.openai` wrapper or decorator approach; document cost-tracking and latency-monitoring setup; record findings relevant to T040 and T045
+- [X] T000f [P] Research Streamlit map performance: confirm approach for rendering 10,000+ Folium markers without degradation (marker clustering, GeoJSON optimisation); record findings relevant to T037
+- [X] T000g [P] Source authoritative GeoJSON boundary files for 6 Brazilian biomes and 27 states from IBGE or TerraBrasilis; replace placeholder `null` geometries in `data/geojson/biomes.geojson` and `data/geojson/states.geojson`
+
+**Checkpoint**: `research.md` complete; all INPE endpoints confirmed and `.env.example` updated; GeoJSON files contain real polygon geometries; Phase 3 can begin.
+
+---
+
 ## Phase 1: Setup (Shared Infrastructure)
 
 **Purpose**: Initialize the project with uv, create the directory structure, and configure tooling.
@@ -179,13 +200,14 @@
 
 ### Phase Dependencies
 
-- **Phase 1 (Setup)**: No dependencies — start immediately
+- **Phase 0 (Research)**: No dependencies — start immediately; **BLOCKS Phase 3+**
+- **Phase 1 (Setup)**: No dependencies — runs in parallel with Phase 0
 - **Phase 2 (Foundational)**: Depends on Phase 1 — **BLOCKS all user stories**
-- **Phase 3 (US7)**: Depends on Phase 2
+- **Phase 3 (US7)**: Depends on Phase 0 (confirmed endpoints) + Phase 2
 - **Phase 4 (US6)**: Depends on Phase 2 (models + utils only; no INPE clients needed)
 - **Phase 5 (US2)**: Depends on Phase 3 (US7) + Phase 4 (US6)
 - **Phase 6 (US3)**: Depends on Phase 3 (US7) + Phase 4 (US6)
-- **Phase 7 (US1)**: Depends on Phase 3 (US7)
+- **Phase 7 (US1)**: Depends on Phase 0 (ConversationService patterns) + Phase 3 (US7)
 - **Phase 8 (US4)**: Depends on Phase 3 (US7)
 - **Phase 9 (US5)**: Depends on Phase 3 (US7)
 - **Phase 10 (Polish)**: Depends on all previous phases complete
@@ -246,7 +268,8 @@ After US7 completes (regardless of US2/US3):
 
 | Metric | Value |
 |--------|-------|
-| Total tasks | 59 |
+| Total tasks | 67 |
+| Phase 0 (Research) | 8 tasks |
 | Phase 1–2 (Setup + Foundational) | 24 tasks |
 | US7 (INPE Integration) | 6 tasks |
 | US6 (Filters) | 3 tasks |
@@ -256,4 +279,4 @@ After US7 completes (regardless of US2/US3):
 | US4 (Alerts) | 3 tasks |
 | US5 (Trends) | 4 tasks |
 | Phase 10 (Polish) | 5 tasks |
-| **Suggested MVP scope** | **Phases 1–3 + Phase 7 (US7 + US1)** — 38 tasks |
+| **Suggested MVP scope** | **Phases 0–3 + Phase 7 (US7 + US1)** — 46 tasks |
