@@ -18,7 +18,7 @@
 
 **Purpose**: Initialize the project with uv, create the directory structure, and configure tooling.
 
-- [X] T001 Initialize uv project: create `pyproject.toml` with all dependencies from plan.md (streamlit, langgraph, langfuse, pydantic, pandas, geopandas, rasterio, gdal, plotly, folium, httpx, openai, sqlalchemy, alembic, pytest, redis)
+- [X] T001 Initialize uv project: create `pyproject.toml` with all dependencies from plan.md (streamlit, langfuse, pydantic, pandas, geopandas, rasterio, plotly, folium, httpx, openai, sqlalchemy, alembic, pytest, redis); langgraph included as a dependency for the post-MVP upgrade path but not used in MVP code
 - [X] T002 Create full source directory structure per plan.md: `src/`, `tests/unit/`, `tests/integration/`, `tests/contract/`, `data/geojson/`, `data/reference/`, `alembic/versions/`
 - [X] T003 [P] Create `.env.example` with all required variables: OPENAI_API_KEY, OPENAI_MODEL, INPE_DETER_ENDPOINT, INPE_PRODES_ENDPOINT, INPE_FOGO_ENDPOINT, DATABASE_URL, REDIS_URL, CACHE_TTL_DEFAULT, ALERT_THRESHOLD_FIRES, ALERT_THRESHOLD_DEFORESTATION, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_ENDPOINT
 - [X] T004 [P] Create `docker-compose.yml` with three services: `postgres` (`postgis/postgis:15-3.4`, port 5432, volume `pgdata`), `redis` (`redis:7-alpine`, port 6379), and `langfuse` (official image, optional profile `--profile langfuse`); default dev path (SQLite) remains functional without Docker
@@ -126,8 +126,8 @@
 - [ ] T042 [P] [US1] Create `src/services/conversation/query_parser.py`: `parse_query(text) -> ParsedQuery`; extracts geographic context (region/biome/coordinates), metric of interest (deforestation/fire/vegetation), temporal scope, and language (PT/EN auto-detect); handles "São Paulo" ambiguity by returning clarification options
 - [ ] T043 [P] [US1] Create `src/services/conversation/session_manager.py`: `create_session()`, `add_message()`, `get_context()`, `save_session()` — persists `ConversationSession` to SQLite via `src/database/`
 - [ ] T044 [US1] Create `src/services/conversation/response_generator.py`: `format_data_context()` (converts Pydantic models to readable markdown), `add_citations()` (appends INPE attribution), `format_time_content()` (adds freshness info)
-- [ ] T045 [US1] Create `src/services/conversation/langfuse_wrapper.py`: `@trace_llm_call` decorator (logs inputs/outputs, token counts, cost), `@trace_langgraph_node` decorator (node latency), session correlation (Streamlit session_id → Langfuse trace_id)
-- [ ] T046 [US1] Create `src/services/conversation/langgraph_engine.py`: start with simple `ConversationService` (message history + `LLMProvider` call + `SessionManager`); define LangGraph state graph with nodes (parse_query → retrieve_data → generate_response → update_context) as the upgrade path; activate LangGraph nodes if multi-step branching is needed; all LLM calls go through `langfuse_wrapper.py`
+- [ ] T045 [US1] Create `src/services/conversation/langfuse_wrapper.py`: `@trace_llm_call` decorator (logs inputs/outputs, token counts, cost), `@trace_langgraph_node` as a no-op stub reserved for the post-MVP LangGraph upgrade, session correlation (Streamlit session_id → Langfuse trace_id)
+- [ ] T046 [US1] Create `src/services/conversation/conversation_engine.py`: implement `ConversationService` (message history + `LLMProvider` call + `SessionManager`) as a linear pipeline — parse_query → retrieve_data → generate_response → update_context; all LLM calls go through `langfuse_wrapper.py`; LangGraph is the documented post-MVP upgrade path but not implemented here
 - [ ] T047 [US1] Create `src/ui/pages/conversation.py`: Streamlit chat UI with `st.chat_message`, session history display, query input (placeholder text in Portuguese), geographic context chip showing active region/biome, Langfuse session ID stored in `st.session_state`
 
 **Checkpoint**: Multi-turn PT/EN conversations work end-to-end; INPE data cited; Langfuse dashboard shows traces and costs.
@@ -157,7 +157,7 @@
 - [ ] T051 [US5] Create `src/services/analysis/trend_analyzer.py`: `calculate_trend(series) -> TrendInfo` (direction, slope, confidence), `seasonal_decomposition()`, `compare_periods(period_a, period_b) -> dict` (% change, absolute values)
 - [ ] T052 [P] [US5] Create `src/services/data_export.py`: `export_csv(data, filename)` and `export_pdf(chart, data, filename)` — both include INPE data source attribution header and collection timestamps
 - [ ] T053 [US5] Create `src/ui/pages/trends.py`: region/biome/metric selectors, configurable date range, trend line with direction indicator, side-by-side period comparison panel, export buttons using `data_export.py`
-- [ ] T054 [P] [US5] Create `src/ui/pages/about.py`: INPE data sources list with endpoints, data definitions (DETER/PRODES/FOGO), update frequency table, citation guidelines
+- [X] T054 [P] [US5] Create `src/ui/pages/about.py`: INPE data sources list with endpoints, data definitions (DETER/PRODES/FOGO), update frequency table, citation guidelines
 
 **Checkpoint**: Trend analysis returns data for at least 24 months; period comparison calculates correct % change; CSV export downloads with proper attribution.
 
@@ -170,7 +170,7 @@
 - [ ] T055 Update `src/app.py` to wire all 6 pages into `st.navigation()`: Conversation, Dashboard, Map, Alerts, Trends, About — with Portuguese page labels
 - [ ] T056 [P] Apply `@st.cache_data(ttl=3600)` to all static geographic data loads in `geospatial.py` and `map.py`; profile map rendering with 10,000+ markers and confirm no degradation
 - [ ] T057 [P] Security hardening: audit that no API keys are logged, all INPE responses pass Pydantic validation before use, rate limiter in `BaseINPEClient` tested under load
-- [ ] T058 [P] Write `README.md` covering project overview, local setup (default SQLite path and Docker Compose prod-parity path), full `uv run` command reference, environment configuration, architecture diagram reference
+- [ ] T058 [P] Update `README.md` to finalize: architecture diagram, full environment configuration reference, and any sections deferred from T005
 - [ ] T059 Run end-to-end validation: `uv sync` → configure `.env` → `alembic upgrade head` → `streamlit run src/app.py`; verify all 6 pages load; verify INPE data appears with freshness badge; verify Portuguese conversation round-trip
 
 ---
@@ -204,17 +204,17 @@
 
 ```
 After Phase 2 completes:
-  ├── US7 (T024–T029) — INPE clients
-  └── US6 (T030–T032) — Filter components (parallel with US7)
+  ├── US7 (T025–T030) — INPE clients
+  └── US6 (T031–T033) — Filter components (parallel with US7)
 
 After US7 + US6 complete:
-  ├── US2 (T033–T035) — Dashboard
-  ├── US3 (T036–T037) — Map (parallel with US2)
-  └── US1 (T038–T046) — Conversation (parallel with US2/US3)
+  ├── US2 (T034–T036) — Dashboard
+  ├── US3 (T037–T038) — Map (parallel with US2)
+  └── US1 (T039–T047) — Conversation (parallel with US2/US3)
 
 After US7 completes (regardless of US2/US3):
-  ├── US4 (T047–T049) — Alerts
-  └── US5 (T050–T053) — Trends (parallel with US4)
+  ├── US4 (T048–T050) — Alerts
+  └── US5 (T051–T054) — Trends (parallel with US4)
 ```
 
 ---

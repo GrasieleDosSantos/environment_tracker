@@ -8,7 +8,9 @@
 
 ## Summary
 
-The Environmental Status Tracker for Brazil is a Python-based Streamlit application providing conversational and visual access to Brazilian environmental data from INPE (Instituto Nacional de Pesquisas Espaciais). The system integrates data from DETER (deforestation detection), PRODES (Amazon deforestation program), and FOGO (fire detection) into an interactive dashboard with LLM-powered multi-turn conversational querying and LangGraph orchestration for complex dialogue flows. Users can explore environmental metrics through natural language queries, filterable dashboards, and map visualizations, with trend analysis and automatic alert generation for environmental events. The architecture prioritizes performance (dashboard <5s load time, API <2s response), concurrent conversation support (50+), and data accuracy (95% query interpretation rate).
+The Environmental Status Tracker for Brazil is a Python-based Streamlit application providing conversational and visual access to Brazilian environmental data from INPE (Instituto Nacional de Pesquisas Espaciais). The system integrates data from DETER (deforestation detection), PRODES (Amazon deforestation program), and FOGO (fire detection) into an interactive dashboard with LLM-powered multi-turn conversational querying. Users can explore environmental metrics through natural language queries, filterable dashboards, and map visualizations, with trend analysis and automatic alert generation for environmental events. The architecture prioritizes performance (dashboard <5s load time, API <2s response), concurrent conversation support (50+), and data accuracy (95% query interpretation rate).
+
+**Conversation engine decision**: MVP uses a simple `ConversationService` loop (message history + `LLMProvider` call + `SessionManager`). LangGraph is retained as a named upgrade path for when multi-step branching flows or parallel data-retrieval are needed post-MVP — it is **not** a Sprint 3 dependency.
 
 ## Technical Context
 
@@ -16,8 +18,8 @@ The Environmental Status Tracker for Brazil is a Python-based Streamlit applicat
 
 **Primary Dependencies**: 
 - **UI Framework**: Streamlit (interactive dashboards and web UI)
-- **LLM Orchestration**: LangGraph (conversational features, multi-turn dialogue, agentic workflows)
-- **Observability & Tracing**: Langfuse (LLM observability, cost tracking, latency monitoring for LangGraph workflows)
+- **LLM Orchestration**: `ConversationService` loop for MVP (message history + `LLMProvider` call); LangGraph reserved as post-MVP upgrade for branching/agentic flows
+- **Observability & Tracing**: Langfuse (LLM observability, cost tracking, latency monitoring)
 - **Data Validation**: Pydantic v2 (data models and settings management)
 - **Data Processing**: Pandas, GeoPandas (environmental data manipulation)
 - **Geospatial**: Rasterio, GDAL/OGR (satellite imagery and geographic operations)
@@ -67,7 +69,7 @@ The Environmental Status Tracker for Brazil is a Python-based Streamlit applicat
 - Transparent error handling for data availability issues
 
 ✅ **User-Centric Conversational Interface** (Principle 2)
-- LangGraph provides multi-turn, context-aware dialogue
+- `ConversationService` loop provides multi-turn, context-aware dialogue for MVP; LangGraph available as upgrade
 - Pydantic models ensure data consistency across conversational context
 - Progressive disclosure through dashboard filtering and map drill-down
 
@@ -86,13 +88,13 @@ The Environmental Status Tracker for Brazil is a Python-based Streamlit applicat
 
 ✅ **Code Quality** (PEP 8, type hints, docstrings, >80% test coverage)
 - Pydantic provides runtime type checking and validation
-- LangGraph workflows enforce clear interfaces
+- `ConversationService` enforces clear input/output interfaces; LangGraph can replace it without touching callers
 - Test strategy includes unit, integration, and contract tests
 
 ✅ **Performance Requirements** Met
 - <5s dashboard load: Streamlit caching + async INPE fetching
 - <2s API response: Parallel data retrieval + local caching
-- 50+ concurrent conversations: LangGraph with async task queue
+- 50+ concurrent conversations: async `ConversationService` (LangGraph upgrade preserves this)
 
 ✅ **Reliability Requirements** Met
 - Graceful fallback for INPE API failures (last known data display)
@@ -130,7 +132,7 @@ The Environmental Status Tracker for Brazil is a Python-based Streamlit applicat
 1. **INPE Data Integration** - Primary data source DETER/PRODES/FOGO APIs
 2. **Brazilian Environmental Analysis** - Deforestation, fire, biome metrics
 3. **Interactive Dashboard** - Streamlit with filters and visualizations
-4. **Conversational Interface** - LangGraph + LLM with INPE context
+4. **Conversational Interface** - `ConversationService` + LLM with INPE context (LangGraph post-MVP)
 
 **GATE RESULT**: ✅ PASSED - All constitution principles and quality standards are addressable with proposed architecture.
 
@@ -141,7 +143,7 @@ The Environmental Status Tracker for Brazil is a Python-based Streamlit applicat
 ```text
 specs/001-environmental-tracker/
 ├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output: INPE API patterns, Streamlit best practices, LangGraph workflows
+├── research.md          # Phase 0 output: INPE API patterns, Streamlit best practices, ConversationService patterns
 ├── data-model.md        # Phase 1 output: Entity schemas, relationships, validation rules
 ├── quickstart.md        # Phase 1 output: Setup, environment config, first run guide
 ├── contracts/           # Phase 1 output: API schemas and interface contracts
@@ -192,7 +194,7 @@ environment_tracker/
 │   │   │
 │   │   ├── conversation/
 │   │   │   ├── __init__.py
-│   │   │   ├── langgraph_engine.py     # LangGraph workflow orchestration with Langfuse tracing
+│   │   │   ├── conversation_engine.py  # ConversationService (MVP); LangGraph upgrade path documented
 │   │   │   ├── query_parser.py         # Extract geographic context and intent from queries
 │   │   │   ├── response_generator.py   # Format INPE data for conversational responses
 │   │   │   ├── session_manager.py      # Conversation persistence and context maintenance
@@ -251,7 +253,7 @@ environment_tracker/
 │   │   ├── test_inpe_prodes.py         # PRODES API integration
 │   │   ├── test_inpe_fogo.py           # FOGO API integration
 │   │   ├── test_data_aggregation.py    # Multi-source data combining
-│   │   ├── test_conversation_flow.py   # LangGraph workflow testing
+│   │   ├── test_conversation_flow.py   # ConversationService pipeline testing
 │   │   └── test_streamlit_pages.py     # UI page rendering
 │   │
 │   └── contract/
@@ -283,7 +285,7 @@ No violations to constitution or quality standards identified. Architecture alig
 - Clear layered separation (models → services → UI)
 - All INPE integrations follow best practice patterns
 - Scalable for 50+ concurrent users with caching and async patterns
-- Conversational engine (LangGraph) enables natural multi-turn dialogue while maintaining context
+- Conversational engine (`ConversationService`) enables natural multi-turn dialogue while maintaining context; LangGraph is the documented post-MVP upgrade path
 
 ---
 
@@ -304,7 +306,7 @@ No violations to constitution or quality standards identified. Architecture alig
 ┌───────────────────────────────────────────────────────────────────┐
 │                   Application Logic Layer                         │
 │  ┌─────────────────────────────────────────────────────────────┐ │
-│  │ Conversation Engine (LangGraph + LLM)                       │ │
+│  │ Conversation Engine (ConversationService + LLM)             │ │
 │  │  - Multi-turn dialogue orchestration                        │ │
 │  │  - Intent extraction and context management                 │ │
 │  │  - Response generation with INPE data                       │ │
@@ -355,7 +357,7 @@ No violations to constitution or quality standards identified. Architecture alig
 
 1. **User Query → Conversation Service**
    - User submits query (conversational interface)
-   - LangGraph parses intent, extracts geographic context
+   - `ConversationService` parses intent, extracts geographic context
    - Query parser creates structured request with filters
 
 2. **Data Retrieval → INPE Integration Layer**
@@ -373,7 +375,7 @@ No violations to constitution or quality standards identified. Architecture alig
 
 4. **Response Generation → LLM Orchestration**
    - Processed data formatted as context for LLM
-   - LangGraph manages multi-turn dialogue state
+   - `ConversationService` manages multi-turn dialogue state
    - LLM generates conversational response with citations
    - Response cached in conversation session
 
@@ -462,15 +464,18 @@ No violations to constitution or quality standards identified. Architecture alig
 
 #### 3. **Conversation Engine** (`src/services/conversation/`)
 
-**LangGraph Engine** (`langgraph_engine.py`)
-- Orchestrates multi-turn conversational workflows
-- State graph nodes:
-  - `parse_query` → Extract intent, geographic context, temporal scope
-  - `retrieve_data` → Call appropriate INPE clients + analysis services
-  - `generate_response` → LLM creates conversational response
-  - `update_context` → Store session context for next turn
-- Used for: Multi-step dialogues, clarifications, context carryover
-- Manages conversation history (stored in ConversationSession)
+**Conversation Engine** (`conversation_engine.py`)
+
+*MVP implementation*: Simple `ConversationService` loop — no graph wiring required.
+- Steps: parse_query → retrieve_data → generate_response → update_context (linear, no branching)
+- Message history and context maintained in `ConversationSession`
+- All LLM calls go through `LLMProvider`; all calls traced via `langfuse_wrapper.py`
+
+*Post-MVP upgrade path*: Replace `ConversationService` with a LangGraph state graph when any of these triggers arise:
+- Multi-step clarification flows (e.g., "São Paulo" ambiguity needing a follow-up turn)
+- Parallel data-retrieval branches (fire + deforestation simultaneously)
+- Conditional routing based on query type
+- The upgrade is designed to be a drop-in: callers never import LangGraph directly, so switching is contained to this file
 
 **Query Parser** (`query_parser.py`)
 - LLM-based or rule-based parsing of natural language queries
@@ -513,15 +518,14 @@ No violations to constitution or quality standards identified. Architecture alig
 - Observability and tracing integration for LLM calls
 - Methods:
   - `trace_llm_call()` - Decorator for OpenAI API calls, logs all inputs/outputs to Langfuse
-  - `trace_langgraph_node()` - Decorator for LangGraph node execution, measures node latency
+  - `trace_langgraph_node()` - Reserved for post-MVP LangGraph upgrade; no-op stub in MVP
   - `get_langfuse_trace()` - Retrieve current trace context for nested calls
   - `update_trace_metadata()` - Add custom metadata (user_id, query_type, region, biome)
 - Features:
   - Automatic cost tracking (tokens per call, cumulative cost per session)
-  - Latency monitoring for each LLM generation and node execution
+  - Latency monitoring for each LLM generation
   - Error tracing with stack traces
   - User session correlation (maps Streamlit session_id to Langfuse trace_id)
-  - Performance monitoring of LangGraph workflows
 - Configuration: Reads from `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_ENDPOINT` environment variables
 
 #### 4. **UI Components** (`src/ui/`)
@@ -531,7 +535,7 @@ No violations to constitution or quality standards identified. Architecture alig
 - **conversation.py**: Chat interface with session history, context display
   - Streamlit chat UI with message history
   - Query input with Portuguese/English support
-  - LangGraph integration via `ConversationService`
+  - `ConversationService` integration for multi-turn dialogue
   - Geographic context display (current region/biome filter)
 
 - **dashboard.py**: Multi-metric overview with filters
@@ -646,18 +650,20 @@ No violations to constitution or quality standards identified. Architecture alig
 - Reactive updates: Streamlit re-runs on filter changes, new messages
 - **Langfuse Session Tracking**: Each user session generates a Langfuse session ID for tracking conversations across page reloads
 
-#### **LangGraph Integration**
-- State machine for conversation workflows
-- Graph definition: Nodes (parse_query, retrieve_data, generate_response, update_context), Edges (branching logic)
-- LLM calls: Integrated with OpenAI/compatible API
-- **Langfuse Tracing Integration**:
-  - All LLM calls wrapped with Langfuse SDK for observability
-  - Automatic cost tracking (input/output tokens per call)
-  - Latency monitoring for each LangGraph node execution
-  - Input/output token counting and cost calculation
-  - Trace chain visualization for debugging multi-turn conversations
-- State persistence: Serializable ConversationSession objects with Langfuse session IDs
-- Error handling: Fallback nodes for API failures with error tracing
+#### **Conversation Engine Integration**
+
+**MVP** — `ConversationService` (no LangGraph):
+- Linear pipeline: parse_query → retrieve_data → generate_response → update_context
+- LLM calls via `LLMProvider`; all wrapped with Langfuse tracing decorators
+- State persistence: `ConversationSession` serialised to SQLite via `SessionManager`
+- Error handling: try/except with fallback response; session state preserved on failure
+
+**Post-MVP** — LangGraph upgrade (when needed):
+- Drop `ConversationService` internals; replace with LangGraph `StateGraph`
+- Nodes: parse_query, retrieve_data, generate_response, update_context (same names as MVP steps)
+- Edges: conditional routing, parallel retrieval branches
+- Langfuse tracing extended with per-node latency via `@trace_langgraph_node`
+- Callers (`conversation.py` page, tests) require no changes — upgrade is fully internal
 
 #### **Pydantic Integration**
 - All data models use Pydantic v2
@@ -686,16 +692,16 @@ No violations to constitution or quality standards identified. Architecture alig
 - Investigate INPE API documentation (DETER, PRODES, FOGO)
 - **Investigate TerraBrasilis** (INPE's data platform at terrabrasilis.dpi.inpe.br) — it exposes OGC WFS/WMS services and REST APIs for DETER and PRODES; some datasets may only be available as bulk file downloads (GeoTIFF, Shapefile) rather than traditional REST endpoints. Actual access method will influence client architecture.
 - Determine current API access methods (REST, TerraBrasilis WFS/WMS, bulk downloads, authentication)
-- Research Streamlit + LangGraph integration patterns; evaluate whether a simpler `ConversationService` class suffices for MVP before committing to LangGraph (see Sprint 3 trade-off note)
-- Research Langfuse integration with LangGraph and OpenAI API
+- Research Streamlit + `ConversationService` async patterns for MVP; separately document LangGraph integration as the post-MVP upgrade path
+- Research Langfuse integration with OpenAI API (direct, no LangGraph dependency for MVP)
 - Explore geospatial library best practices (GeoPandas, Folium)
 - Document PostgreSQL + PostGIS setup for production
 
 **Unknowns to Research**
 1. INPE/TerraBrasilis API specifications (exact endpoints, rate limits, authentication, response formats — REST vs. WFS/WMS vs. file download)
 2. INPE historical data availability (24+ months, granularity, update frequency)
-3. LangGraph best practices for environmental domain context management; assess complexity vs. simpler conversation loop for MVP
-4. Langfuse SDK integration patterns with LangGraph workflows
+3. `ConversationService` async patterns and session memory footprint under 50+ concurrent users
+4. Langfuse SDK integration with plain OpenAI calls (no LangGraph dependency for MVP tracing)
 5. Streamlit performance optimization with 10k+ map markers
 6. Geographic reference data sources (accurate state/biome boundaries)
 7. Langfuse cost tracking and latency monitoring best practices for LLM applications
@@ -772,18 +778,17 @@ No violations to constitution or quality standards identified. Architecture alig
 #### **Sprint 3: Conversational Engine (2 weeks)**
 - Dependencies: Dashboard foundation, INPE integration solid
 
-> **LangGraph trade-off**: LangGraph is the target architecture for multi-step branching dialogues, but it adds meaningful complexity (state graphs, node wiring, Langfuse integration) that may not pay off for MVP-level linear conversations (query → fetch → respond). Start Sprint 3 by implementing a simple `ConversationService` loop; introduce LangGraph only if multi-step clarification flows or parallel data-retrieval branches are needed during this sprint. This avoids over-engineering while keeping the path open.
+> **Architecture decision**: MVP uses a simple `ConversationService` loop — linear pipeline with no graph wiring. LangGraph is **not** a Sprint 3 task. It becomes relevant only when a concrete need for branching or parallel retrieval emerges post-MVP (see upgrade triggers in Component Specs above).
 
 - Tasks:
   - Implement query parser (LLM-based or hybrid)
-  - Start with simple `ConversationService` (message history + `LLMProvider` call); upgrade to LangGraph conversation workflow if branching logic is required
+  - Implement `ConversationService`: message history + `LLMProvider` call + `SessionManager`
   - Implement response generator with INPE data formatting
   - Session manager for conversation history
   - Conversation page in Streamlit
-  - System prompts and few-shot examples
+  - System prompts and few-shot examples (Portuguese-first)
   - Implement Langfuse SDK initialization (`langfuse_config.py`)
-  - Add Langfuse tracing to all LLM calls (OpenAI integration)
-  - Implement `langfuse_wrapper.py` with tracing decorators
+  - Add Langfuse tracing to all LLM calls via `langfuse_wrapper.py`
   - Add Langfuse session tracking to Streamlit session state
 
 **Deliverables**:
@@ -825,7 +830,7 @@ No violations to constitution or quality standards identified. Architecture alig
   - Documentation (architecture, deployment, data definitions, Langfuse setup)
   - Security review (API key handling, data validation, Langfuse credentials)
   - Load testing with 50+ concurrent users and Langfuse monitoring
-  - **Profile per-session memory**: each Streamlit session holding LangGraph state can be memory-heavy; measure and set a session memory ceiling before go-live
+  - **Profile per-session memory**: each Streamlit session holding `ConversationSession` state adds memory; measure and set a session memory ceiling before go-live (if LangGraph is later introduced, re-profile — its state graphs are heavier)
 
 **Deliverables**:
 - >80% test coverage across all modules
@@ -962,7 +967,7 @@ INPE API Request
 - Time-series alignment
 
 **Conversation Flow** (`test_conversation_flow.py`)
-- LangGraph workflow execution
+- `ConversationService` pipeline execution
 - Multi-turn context preservation
 - Query → data retrieval → response generation pipeline
 
@@ -994,7 +999,7 @@ INPE API Request
 - Test with various result set sizes
 
 **Concurrent Conversations**: 50+ users
-- Load test with 50+ concurrent LangGraph sessions
+- Load test with 50+ concurrent `ConversationService` sessions
 - Monitor response time, memory usage
 
 ### Test Data
@@ -1101,11 +1106,11 @@ LANGFUSE_ENDPOINT=https://cloud.langfuse.com  # or self-hosted
     - Input/output token counting
     - Temperature and model configuration logging
   
-  - **LangGraph Workflow Tracing**:
-    - Trace execution of conversation workflow nodes (parse_query, retrieve_data, generate_response)
-    - Monitor time spent in each node
-    - Track data flow through the conversation state graph
+  - **Conversation Pipeline Tracing**:
+    - Trace execution of `ConversationService` steps (parse_query, retrieve_data, generate_response)
+    - Monitor time spent in each step
     - Identify performance bottlenecks in multi-turn dialogues
+    - *(Post-MVP: extend with per-node tracing when LangGraph is introduced)*
   
   - **INPE API Integration Observability**:
     - Track INPE API calls (endpoint, response time, error rates)
@@ -1126,7 +1131,7 @@ LANGFUSE_ENDPOINT=https://cloud.langfuse.com  # or self-hosted
     - Conversation funnel (queries → successful responses)
 
 - **Metrics**: Track API response times, cache hit rates, error counts, LLM token usage, conversation duration
-- **Alerts**: Alert on INPE API unavailability, high error rates, LLM cost anomalies, LangGraph workflow failures
+- **Alerts**: Alert on INPE API unavailability, high error rates, LLM cost anomalies, conversation pipeline failures
 - **Data Freshness**: Monitor last update time from each INPE source
 
 ### Database Migrations
