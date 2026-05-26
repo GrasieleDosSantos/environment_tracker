@@ -40,7 +40,7 @@ GET https://terrabrasilis.dpi.inpe.br/geoserver/deter-amz/ows
   &count=100
 ```
 
-⚠️ **Verify before Phase 3**: Confirm exact layer names via `GetCapabilities` request. Layer names occasionally change between GeoServer deployments.
+✅ **V1 & V4 resolved (2026-05-26)**: Layer `deter-amz:deter_amz` confirmed. CQL_FILTER property names are lowercase (`view_date`, `uf`, `classname`, `areamunkm`, `bioma`). Use lowercase in all filter expressions.
 
 ### PRODES (Amazon Deforestation Program)
 
@@ -61,17 +61,20 @@ GET https://terrabrasilis.dpi.inpe.br/geoserver/deter-amz/ows
 |----------|-------|
 | Primary source | BDQueimadas (`queimadas.dgi.inpe.br`) |
 | TerraBrasilis WFS | `https://terrabrasilis.dpi.inpe.br/queimadas/geoserver/ows` |
-| Key layer | `focos_aqua_referencia` (reference hotspots, AQUA satellite) |
-| All-satellite layer | `focos_bdq` (aggregated from all satellites) |
-| Satellite sources | AQUA_M-T, TERRA_M-T, NPP_375 (VIIRS), GOES-16, MSG-03 |
-| Response formats | GeoJSON, CSV |
+| 48-hour layer | `dados_abertos:focos_48h_br_todosats` ✅ **verified 2026-05-26** |
+| Today layer | `dados_abertos:focos_hoje_br_todosats` |
+| Annual archive | `dados_abertos:focos_YYYY_br_todosats` (e.g. `focos_2026_br_todosats`) |
+| Current year | `dados_abertos:focos_ano_atual_br_todosats` |
+| Satellite sources | GOES-19, AQUA_M-T, TERRA_M-T, NPP_375 (VIIRS) |
+| Response formats | GeoJSON |
 | Update frequency | Every 3–6 hours for near-real-time satellites |
-| Historical depth | 1998 to present (daily) |
-| Filter parameters | `datahora` (datetime), `estado`, `bioma`, `satelite` |
+| Historical depth | 1998 to present (annual layers) |
+| Filter parameters | `data_pas` (YYYY-MM-DD date), `estado` (full state name, uppercase), `bioma`, `satelite` |
+| Note | `estado` stores full name (e.g. `MATO GROSSO`), not 2-letter code |
 
-**Architecture decision**: Use the TerraBrasilis GeoServer for FOGO data (consistent with DETER/PRODES access pattern) rather than the separate BDQueimadas portal, which requires a different client approach.
+**Architecture decision**: Use the TerraBrasilis GeoServer for FOGO data (consistent with DETER/PRODES access pattern) rather than the separate BDQueimadas portal.
 
-⚠️ **Verify before Phase 3**: Confirm the `focos_bdq` layer name and whether near-real-time hotspots (< 6 hours) are available via WFS or require the BDQueimadas REST API separately.
+✅ **V5 resolved (2026-05-26)**: `focos_48h_br_todosats` provides near-real-time hotspots without a date CQL filter. Historical queries use `focos_YYYY_br_todosats` with `data_pas` date field.
 
 ### Historical Data Availability Summary
 
@@ -299,13 +302,13 @@ biomes.to_file("data/geojson/biomes.geojson", driver="GeoJSON")
 
 ## 7. Outstanding Items Before Phase 3
 
-| ID | Item | Owner | Blocking |
+| ID | Item | Status | Blocking |
 |----|------|--------|---------|
-| V1 | Run `GetCapabilities` on each GeoServer and confirm exact layer names | Dev | T025–T029 |
-| V2 | Confirm `LANGFUSE_HOST` vs `LANGFUSE_ENDPOINT` env var name | Dev | T040, T045 |
-| V3 | Download real GeoJSON boundary files (run script in section 6) | Dev | T030 |
-| V4 | Test DETER WFS request manually; confirm CQL_FILTER date syntax | Dev | T027 |
-| V5 | Confirm FOGO near-real-time layer availability (< 6h data) | Dev | T029 |
+| V1 | Run `GetCapabilities` on each GeoServer and confirm exact layer names | ✅ Resolved 2026-05-26 | T025–T029 |
+| V2 | Confirm `LANGFUSE_HOST` vs `LANGFUSE_ENDPOINT` env var name | ✅ Resolved 2026-05-25 (fixed to `LANGFUSE_HOST`) | T040, T045 |
+| V3 | Download real GeoJSON boundary files | ✅ Resolved 2026-05-25 (27 states + 6 biomes from IBGE) | T030 |
+| V4 | Test DETER WFS request manually; confirm CQL_FILTER date syntax | ✅ Resolved 2026-05-26 (lowercase fields; `view_date`, `uf`, `classname`) | T027 |
+| V5 | Confirm FOGO near-real-time layer availability (< 6h data) | ✅ Resolved 2026-05-26 (`dados_abertos:focos_48h_br_todosats`) | T029 |
 
 ---
 

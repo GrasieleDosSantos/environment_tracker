@@ -83,12 +83,12 @@
 
 **Independent Test**: Run `python -m src.services.inpe_integration.fogo_client` and confirm fire hotspot data is returned and cached within 2 seconds per request.
 
-- [ ] T025 Create `src/services/inpe_integration/base.py` with `BaseINPEClient`: HTTPX async client, token-bucket rate limiting, exponential-backoff retry, circuit breaker for 5xx errors, Pydantic response validation
-- [ ] T026 Create `src/services/inpe_integration/cache_manager.py` with SQLite-backed `CacheManager`: `get()`, `set()`, `delete()`, `invalidate_by_pattern()`, TTL-based expiration, cache key format `{source}:{query_hash}:{version}`
-- [ ] T027 [P] [US7] Create `src/services/inpe_integration/deter_client.py` extending `BaseINPEClient`: `fetch_alerts_by_region()`, `fetch_recent_deforestation()`, `fetch_time_series()`; response model `DETERAlert` with geometry, date, area_km2, confidence; 24h cache TTL
-- [ ] T028 [P] [US7] Create `src/services/inpe_integration/prodes_client.py` extending `BaseINPEClient`: `fetch_deforestation_by_period()`, `fetch_baseline_map()`, `fetch_vintage_series()`; response model `PRODESData`; 30-day cache TTL
-- [ ] T029 [P] [US7] Create `src/services/inpe_integration/fogo_client.py` extending `BaseINPEClient`: `fetch_current_hotspots()`, `fetch_hotspots_by_date()`, `fetch_fire_risk()`; response model `FireHotspot` with lat/lon, detection_time, confidence, satellite_source; 4h cache TTL
-- [ ] T030 [US7] Create `src/services/analysis/geospatial.py`: `get_point_biome()`, `get_point_state()`, `filter_by_region()`, `transform_coordinates()`, `validate_brazilian_coordinates()` — reads from `data/geojson/`
+- [X] T025 Create `src/services/inpe_integration/base.py` with `BaseINPEClient`: HTTPX async client, token-bucket rate limiting, exponential-backoff retry, circuit breaker for 5xx errors, Pydantic response validation
+- [X] T026 Create `src/services/inpe_integration/cache_manager.py` with SQLite-backed `CacheManager`: `get()`, `set()`, `delete()`, `invalidate_by_pattern()`, TTL-based expiration, cache key format `{source}:{query_hash}:{version}`
+- [X] T027 [P] [US7] Create `src/services/inpe_integration/deter_client.py` extending `BaseINPEClient`: `fetch_alerts_by_region()`, `fetch_recent_deforestation()`, `fetch_time_series()`; response model `DETERAlert` with geometry, date, area_km2, confidence; 24h cache TTL
+- [X] T028 [P] [US7] Create `src/services/inpe_integration/prodes_client.py` extending `BaseINPEClient`: `fetch_deforestation_by_period()`, `fetch_baseline_map()`, `fetch_vintage_series()`; response model `PRODESData`; 30-day cache TTL
+- [X] T029 [P] [US7] Create `src/services/inpe_integration/fogo_client.py` extending `BaseINPEClient`: `fetch_current_hotspots()`, `fetch_hotspots_by_date()`, `fetch_fire_risk()`; response model `FireHotspot` with lat/lon, detection_time, confidence, satellite_source; 4h cache TTL
+- [X] T030 [US7] Create `src/services/analysis/geospatial.py`: `get_point_biome()`, `get_point_state()`, `filter_by_region()`, `transform_coordinates()`, `validate_brazilian_coordinates()` — reads from `data/geojson/`
 
 **Checkpoint**: All 3 INPE clients return data, caching works, geospatial lookups resolve biome/state from coordinates.
 
