@@ -55,6 +55,8 @@ class FireHotspot(BaseModel):
     def _from_feature(cls, v: Any) -> Any:
         if not isinstance(v, dict):
             return v
+        if "properties" not in v and "geometry" not in v:
+            return v
         props = v.get("properties") or {}
         geom = v.get("geometry") or {}
 

@@ -114,9 +114,9 @@
 
 **Independent Test**: `streamlit run src/app.py`, navigate to Dashboard; apply "Legal Amazon" filter; all charts update within 500ms; hover tooltip shows data source and collection date.
 
-- [ ] T034 [US2] Create `src/services/analysis/aggregator.py`: `aggregate_multi_source()` (merge DETER + PRODES + FOGO by geometry), `resolve_conflicts()`, `create_unified_view()` returning a unified environmental snapshot
-- [ ] T035 [P] [US2] Create `src/ui/components/charts.py`: `time_series_chart()`, `bar_comparison_chart()`, `spatial_heatmap()` — all Plotly-based with INPE source tooltips and `@st.cache_data` on data fetching
-- [ ] T036 [US2] Create `src/ui/pages/dashboard.py`: KPI cards (deforestation rate, fires last 24h, vegetation status), time-series charts, geographic heatmap; integrates `filters.py` (T031) and `charts.py` (T035); shows freshness badges via `status_indicators.py`
+- [X] T034 [US2] Create `src/services/analysis/aggregator.py`: `aggregate_multi_source()` (merge DETER + PRODES + FOGO by geometry), `resolve_conflicts()`, `create_unified_view()` returning a unified environmental snapshot
+- [X] T035 [P] [US2] Create `src/ui/components/charts.py`: `time_series_chart()`, `bar_comparison_chart()`, `spatial_heatmap()` — all Plotly-based with INPE source tooltips and `@st.cache_data` on data fetching
+- [X] T036 [US2] Create `src/ui/pages/dashboard.py`: KPI cards (deforestation rate, fires last 24h, vegetation status), time-series charts, geographic heatmap; integrates `filters.py` (T031) and `charts.py` (T035); shows freshness badges via `status_indicators.py`
 
 **Checkpoint**: Dashboard renders with real or sample data; filters update all visuals; loads within 5 seconds.
 
