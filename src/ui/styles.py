@@ -10,19 +10,19 @@ import streamlit as st
 # ------------------------------------------------------------------ #
 
 PALETTE = {
-    "primary": "#1B6CA8",       # INPE blue
-    "primary_light": "#4A9FD4",
-    "primary_dark": "#0D4A7A",
+    "primary": "#1E7A4A",       # forest green
+    "primary_light": "#4CAF77",
+    "primary_dark": "#145233",
     "accent_green": "#27AE60",  # healthy vegetation
     "accent_yellow": "#F39C12", # warning / moderate
     "accent_red": "#C0392B",    # alert / critical
     "accent_orange": "#E67E22", # deforestation
     "surface": "#FFFFFF",
-    "surface_alt": "#F8F9FA",
-    "border": "#DEE2E6",
+    "surface_alt": "#F4F9F6",
+    "border": "#D4E6DA",
     "text": "#212529",
     "text_muted": "#6C757D",
-    "sidebar_bg": "#F0F4F8",
+    "sidebar_bg": "#EEF5F1",
 }
 
 # ------------------------------------------------------------------ #
