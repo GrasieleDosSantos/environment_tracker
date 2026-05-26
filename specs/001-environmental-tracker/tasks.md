@@ -100,9 +100,9 @@
 
 **Independent Test**: Render filters in isolation with `streamlit run tests/ui_smoke.py`; select Cerrado biome + last 30 days; verify filter state object reflects both conditions.
 
-- [ ] T031 [US6] Create `src/ui/components/filters.py`: `render_region_filter()` (state/municipality multiselect), `render_biome_filter()` (Amazon/Cerrado/Caatinga/Atlantic Forest/Pantanal/Pampas), `render_date_range_filter()` (calendar + relative presets "last 7/30/90 days"), `render_clear_filters_button()`; filter state stored in `st.session_state`
-- [ ] T032 [P] [US6] Create `src/ui/components/status_indicators.py`: `render_freshness_badge(timestamp)`, `render_api_status(sources)`, `render_error_message(msg, suggestion)`
-- [ ] T033 [P] [US6] Create `src/ui/styles.py` with Streamlit custom CSS: colour palette, card styles, filter sidebar styling, Portuguese-first font stack
+- [X] T031 [US6] Create `src/ui/components/filters.py`: `render_region_filter()` (state/municipality multiselect), `render_biome_filter()` (Amazon/Cerrado/Caatinga/Atlantic Forest/Pantanal/Pampas), `render_date_range_filter()` (calendar + relative presets "last 7/30/90 days"), `render_clear_filters_button()`; filter state stored in `st.session_state`
+- [X] T032 [P] [US6] Create `src/ui/components/status_indicators.py`: `render_freshness_badge(timestamp)`, `render_api_status(sources)`, `render_error_message(msg, suggestion)`
+- [X] T033 [P] [US6] Create `src/ui/styles.py` with Streamlit custom CSS: colour palette, card styles, filter sidebar styling, Portuguese-first font stack
 
 **Checkpoint**: Filter components render correctly; selecting multiple filters produces a valid `FilterState` object.
 

@@ -5,6 +5,8 @@ import uuid
 import streamlit as st
 
 from src.config.settings import get_settings
+from src.ui.components.filters import FilterState, init_filter_state
+from src.ui.styles import inject_custom_css
 from src.utils.logging import configure_logging, set_session_id
 
 configure_logging()
@@ -19,14 +21,7 @@ def _init_session_state() -> None:
     if "langfuse_session_id" not in st.session_state:
         st.session_state.langfuse_session_id = st.session_state.session_id
 
-    if "filter_state" not in st.session_state:
-        st.session_state.filter_state = {
-            "biome": None,
-            "state_code": None,
-            "date_preset": "last_30_days",
-            "date_start": None,
-            "date_end": None,
-        }
+    init_filter_state()
 
     if "conversation_messages" not in st.session_state:
         st.session_state.conversation_messages = []
@@ -41,6 +36,7 @@ def main() -> None:
     )
 
     _init_session_state()
+    inject_custom_css()
 
     conversation_page = st.Page(
         "ui/pages/conversation.py",
