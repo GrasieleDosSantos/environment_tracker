@@ -24,6 +24,7 @@ from src.ui.components.charts import (
     spatial_heatmap,
     time_series_chart,
 )
+from src.services.inpe_integration.deter_client import _DETER_BIOME_LAYERS
 from src.ui.components.filters import FilterState, render_sidebar_filters
 from src.ui.components.status_indicators import (
     render_api_status,
@@ -40,19 +41,25 @@ from src.ui.styles import PALETTE
 @st.cache_data(ttl=86400, show_spinner=False)
 def _load_deter(
     state: str | None,
-    biome: str | None,
+    biome_ids_str: str | None,   # comma-joined biome IDs, e.g. "amazonia,cerrado"
     start_iso: str,
     end_iso: str,
 ) -> list[dict]:
     from datetime import date
-    from src.services.inpe_integration.deter_client import fetch_deter_time_series
-
-    alerts = fetch_deter_time_series(
-        state=state,
-        biome=biome,
-        start=date.fromisoformat(start_iso),
-        end=date.fromisoformat(end_iso),
+    from src.services.inpe_integration.deter_client import (
+        fetch_deter_for_biomes,
+        fetch_deter_time_series,
     )
+
+    start = date.fromisoformat(start_iso)
+    end = date.fromisoformat(end_iso)
+
+    if biome_ids_str:
+        biome_ids = biome_ids_str.split(",")
+        alerts = fetch_deter_for_biomes(state=state, biome_ids=biome_ids, start=start, end=end)
+    else:
+        # No biome filter — default to Amazon only (largest / most active dataset)
+        alerts = fetch_deter_time_series(state=state, start=start, end=end)
     return [a.model_dump(mode="json") for a in alerts]
 
 
@@ -88,6 +95,23 @@ def _filter_dicts(records: list[dict], key: str, values: list[str]) -> list[dict
     return [r for r in records if r.get(key) in values]
 
 
+def _filter_biomes(records: list[dict], biome_ids: list[str]) -> list[dict]:
+    """Case-insensitive client-side biome filter.
+
+    WFS biome values vary in case ('CERRADO', 'Cerrado', 'cerrado').
+    Normalise both sides to lower before comparing.
+    """
+    if not biome_ids:
+        return records
+    names_lower = {
+        b["name"].lower()
+        for bid in biome_ids
+        for b in BIOMES
+        if b["id"] == bid
+    }
+    return [r for r in records if (r.get("biome") or "").lower() in names_lower]
+
+
 def _biome_names(biome_ids: list[str]) -> list[str]:
     return [
         b["name"]
@@ -113,7 +137,6 @@ period_start, period_end = fs.resolve_dates()
 period_days = (period_end - period_start).days
 
 single_state = _single(fs.states)
-single_biome = _single(fs.biomes)
 
 # ------------------------------------------------------------------ #
 # Data loading                                                          #
@@ -123,26 +146,28 @@ deter_error: str | None = None
 fogo_error: str | None = None
 
 with st.spinner("Carregando dados DETER... / Loading DETER data..."):
+    biome_ids_str = ",".join(sorted(fs.biomes)) if fs.biomes else None
     try:
         deter_raw = _load_deter(
-            single_state, single_biome,
+            single_state, biome_ids_str,
             period_start.isoformat(), period_end.isoformat(),
         )
         if len(fs.states) > 1:
             deter_raw = _filter_dicts(deter_raw, "state", fs.states)
-        if len(fs.biomes) > 1:
-            deter_raw = _filter_dicts(deter_raw, "biome", _biome_names(fs.biomes))
     except Exception as exc:
         deter_raw = []
         deter_error = str(exc)
 
 with st.spinner("Carregando dados FOGO... / Loading FOGO data..."):
     try:
-        fogo_raw_48h = _load_fogo_48h(single_state, single_biome)
-        fogo_raw_period = _load_fogo_period(single_state, single_biome, period_days)
+        fogo_raw_48h = _load_fogo_48h(single_state, None)
+        fogo_raw_period = _load_fogo_period(single_state, None, period_days)
         if len(fs.states) > 1:
             fogo_raw_48h = _filter_dicts(fogo_raw_48h, "state", fs.states)
             fogo_raw_period = _filter_dicts(fogo_raw_period, "state", fs.states)
+        if fs.biomes:
+            fogo_raw_48h = _filter_biomes(fogo_raw_48h, fs.biomes)
+            fogo_raw_period = _filter_biomes(fogo_raw_period, fs.biomes)
     except Exception as exc:
         fogo_raw_48h = []
         fogo_raw_period = []
@@ -156,11 +181,21 @@ deter_alerts = [DETERAlert.model_validate(r) for r in deter_raw]
 fogo_48h = [FireHotspot.model_validate(r) for r in fogo_raw_48h]
 fogo_period = [FireHotspot.model_validate(r) for r in fogo_raw_period]
 
+_region_parts: list[str] = []
+if fs.biomes:
+    from src.config.constants import BIOMES as _BIOMES
+    _region_parts.append(", ".join(
+        next((b["name"] for b in _BIOMES if b["id"] == bid), bid) for bid in fs.biomes
+    ))
+if fs.states:
+    _region_parts.append(", ".join(fs.states))
+_region_label = " · ".join(_region_parts) if _region_parts else "Brasil"
+
 snapshot = aggregate_multi_source(
     deter_alerts=deter_alerts,
     fogo_hotspots_48h=fogo_48h,
     fogo_hotspots_period=fogo_period,
-    region_label=fs.summary(),
+    region_label=_region_label,
     period_start=period_start,
     period_end=period_end,
 )
@@ -221,6 +256,28 @@ k4.markdown(
 )
 
 st.divider()
+
+# ------------------------------------------------------------------ #
+# DETER coverage note                                                   #
+# ------------------------------------------------------------------ #
+
+if fs.biomes:
+    no_deter = [
+        next(b["name"] for b in BIOMES if b["id"] == bid)
+        for bid in fs.biomes
+        if bid not in _DETER_BIOME_LAYERS
+    ]
+    if no_deter:
+        biome_list = ", ".join(no_deter)
+        st.info(
+            f"ℹ️ **Monitoramento DETER não disponível para: {biome_list}.**  \n"
+            f"O DETER (alertas em tempo quase real) cobre apenas Amazônia e Cerrado. "
+            f"Para os demais biomas, os gráficos de desmatamento abaixo estarão vazios — "
+            f"dados anuais do PRODES estarão disponíveis na página de Tendências.  \n"
+            f"/ *DETER near-real-time alerts cover only Amazon and Cerrado. "
+            f"For other biomes, deforestation charts below will be empty — "
+            f"annual PRODES data will be available on the Trends page.*",
+        )
 
 # ------------------------------------------------------------------ #
 # Time-series charts                                                    #

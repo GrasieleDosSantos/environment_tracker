@@ -24,7 +24,6 @@ def configure_logging(level: str = "INFO") -> None:
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.stdlib.add_log_level,
-            structlog.stdlib.add_logger_name,
             structlog.processors.TimeStamper(fmt="iso"),
             _add_request_context,
             structlog.processors.StackInfoRenderer(),
@@ -35,7 +34,7 @@ def configure_logging(level: str = "INFO") -> None:
         ),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
-        cache_logger_on_first_use=True,
+        cache_logger_on_first_use=False,
     )
 
 

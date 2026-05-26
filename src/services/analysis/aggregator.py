@@ -129,11 +129,11 @@ def fogo_to_daily_df(hotspots: list[FireHotspot]) -> pd.DataFrame:
     if not hotspots:
         return pd.DataFrame(columns=["date", "count"])
 
-    rows = [
-        {"date": h.detection_time.date()}
-        for h in hotspots
-        if h.detection_time
-    ]
+    rows = []
+    for h in hotspots:
+        d = h.detection_time.date() if h.detection_time else h.date_pas
+        if d:
+            rows.append({"date": d})
     if not rows:
         return pd.DataFrame(columns=["date", "count"])
 

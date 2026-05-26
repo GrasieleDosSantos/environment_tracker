@@ -100,7 +100,13 @@ def time_series_chart(
         )
         if area:
             trace_kwargs["fill"] = "tozeroy"
-            trace_kwargs["fillcolor"] = colour.rstrip(")") + "33)" if colour.startswith("rgb") else colour + "33"
+            if colour.startswith("rgb"):
+                trace_kwargs["fillcolor"] = colour.rstrip(")") + ",0.2)"
+            else:
+                # Convert hex to rgba; strip leading '#' and parse r/g/b
+                h = colour.lstrip("#")
+                r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+                trace_kwargs["fillcolor"] = f"rgba({r},{g},{b},0.2)"
 
         fig.add_trace(go.Scatter(**trace_kwargs))
 

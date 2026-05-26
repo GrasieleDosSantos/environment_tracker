@@ -39,13 +39,14 @@ class FireHotspot(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     detection_time: datetime | None = None
-    state: str | None = None       # 2-letter sigla (derived from estado field)
-    state_name: str | None = None  # full name as stored in WFS
+    date_pas: date | None = None       # data_pas — acquisition date, always populated
+    state: str | None = None           # 2-letter sigla (derived from estado field)
+    state_name: str | None = None      # full name as stored in WFS
     municipality: str | None = None
     biome: str | None = None
     satellite_source: str | None = None
-    confidence: float | None = None   # risco_fogo 0–1
-    frp: float | None = None          # Fire Radiative Power (MW)
+    confidence: float | None = None    # risco_fogo 0–1
+    frp: float | None = None           # Fire Radiative Power (MW)
     days_without_rain: int | None = None
     geometry_type: str | None = None
     geometry_coordinates: Any = None
@@ -86,10 +87,21 @@ class FireHotspot(BaseModel):
             except (TypeError, ValueError):
                 pass
 
+        raw_pas = _p("data_pas") or _p("DATA_PAS")
+        parsed_pas: date | None = None
+        if isinstance(raw_pas, str):
+            try:
+                parsed_pas = date.fromisoformat(raw_pas[:10])
+            except ValueError:
+                pass
+        elif isinstance(raw_pas, date):
+            parsed_pas = raw_pas
+
         return {
             "latitude": lat,
             "longitude": lon,
             "detection_time": parsed_dt,
+            "date_pas": parsed_pas,
             "state": _estado_to_sigla(estado_full),
             "state_name": estado_full,
             "municipality": _p("municipio") or _p("municipality"),

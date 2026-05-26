@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     inpe_deter_endpoint: str = Field(
         default="https://terrabrasilis.dpi.inpe.br/geoserver/deter-amz/ows"
     )
+    inpe_deter_cerrado_endpoint: str = Field(
+        default="https://terrabrasilis.dpi.inpe.br/geoserver/deter-cerrado/ows"
+    )
     inpe_prodes_endpoint: str = Field(
         default="https://terrabrasilis.dpi.inpe.br/geoserver/prodes-amz-nb/ows"
     )

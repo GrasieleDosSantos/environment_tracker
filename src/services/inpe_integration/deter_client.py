@@ -11,10 +11,21 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.config.constants import BIOMES
 from src.config.settings import get_settings
 from src.services.inpe_integration.base import BaseINPEClient
 from src.services.inpe_integration.cache_manager import get_cache_manager
 from src.utils.decorators import async_safe
+
+# Biomes that have a dedicated near-real-time DETER layer on TerraBrasilis.
+# All other biomes fall back to PRODES annual data only.
+_DETER_BIOME_LAYERS: dict[str, str] = {
+    "amazonia": "deter-amz:deter_amz",
+    "cerrado":  "deter-cerrado:deter_cerrado",
+}
+
+# Canonical display names keyed by biome ID (used to inject biome field into records)
+_BIOME_DISPLAY: dict[str, str] = {b["id"]: b["name"] for b in BIOMES}
 
 
 class DETERAlert(BaseModel):
@@ -73,9 +84,11 @@ class DETERClient(BaseINPEClient):
     layer_name = "deter-amz:deter_amz"
     default_cache_ttl = 86400  # 24 h
 
-    def __init__(self) -> None:
+    def __init__(self, endpoint: str | None = None, layer: str | None = None) -> None:
         settings = get_settings()
-        self.wfs_endpoint = settings.inpe_deter_endpoint
+        self.wfs_endpoint = endpoint or settings.inpe_deter_endpoint
+        if layer:
+            self.layer_name = layer
         super().__init__(rate_limit=settings.rate_limit_deter)
         self._cache = get_cache_manager()
 
@@ -113,10 +126,17 @@ class DETERClient(BaseINPEClient):
         if classname:
             filters.append(f"classname = '{classname}'")
 
-        raw = await self._wfs_get_feature(
-            cql_filter=" AND ".join(filters) if filters else None,
-            count=count,
-        )
+        try:
+            raw = await self._wfs_get_feature(
+                cql_filter=" AND ".join(filters) if filters else None,
+                count=count,
+            )
+        except Exception as exc:
+            import httpx
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 400:
+                # 400 often means the biome/state filter has no matching features in this layer
+                return []
+            raise
         self._cache.set(cache_key, self.source_name, raw, self.default_cache_ttl)
         return self.parse_features(raw, DETERAlert)
 
@@ -167,10 +187,16 @@ class DETERClient(BaseINPEClient):
         if biome:
             filters.append(f"bioma = '{biome}'")
 
-        raw = await self._wfs_get_feature(
-            cql_filter=" AND ".join(filters) if filters else None,
-            count=count,
-        )
+        try:
+            raw = await self._wfs_get_feature(
+                cql_filter=" AND ".join(filters) if filters else None,
+                count=count,
+            )
+        except Exception as exc:
+            import httpx
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 400:
+                return []
+            raise
         self._cache.set(cache_key, self.source_name, raw, self.default_cache_ttl)
         return self.parse_features(raw, DETERAlert)
 
@@ -231,3 +257,51 @@ def fetch_deter_time_series(
     count: int = 5000,
 ) -> list[DETERAlert]:
     return _fetch_series_async(state, biome, start, end, count)  # type: ignore[return-value]
+
+
+# ------------------------------------------------------------------ #
+# Multi-biome routing                                                   #
+# ------------------------------------------------------------------ #
+
+@async_safe
+async def _fetch_multi_biome_async(
+    biome_ids: list[str],
+    state: str | None,
+    start: date | None,
+    end: date | None,
+    count: int,
+) -> list[DETERAlert]:
+    """Fetch DETER alerts across all biome-specific layers and merge results."""
+    settings = get_settings()
+    endpoint_map = {
+        "amazonia": settings.inpe_deter_endpoint,
+        "cerrado":  settings.inpe_deter_cerrado_endpoint,
+    }
+    results: list[DETERAlert] = []
+    for biome_id in biome_ids:
+        layer = _DETER_BIOME_LAYERS.get(biome_id)
+        if not layer:
+            continue  # no DETER layer for this biome (PRODES-only)
+        endpoint = endpoint_map[biome_id]
+        async with DETERClient(endpoint=endpoint, layer=layer) as client:
+            alerts = await client.fetch_time_series(
+                state=state, start=start, end=end, count=count
+            )
+        # Inject biome name so client-side filtering works
+        display = _BIOME_DISPLAY.get(biome_id, biome_id)
+        for a in alerts:
+            if not a.biome:
+                a.biome = display
+        results.extend(alerts)
+    return results
+
+
+def fetch_deter_for_biomes(
+    biome_ids: list[str],
+    state: str | None = None,
+    start: date | None = None,
+    end: date | None = None,
+    count: int = 5000,
+) -> list[DETERAlert]:
+    """Fetch DETER time-series across the given biomes, routing to the correct layer per biome."""
+    return _fetch_multi_biome_async(biome_ids, state, start, end, count)  # type: ignore[return-value]

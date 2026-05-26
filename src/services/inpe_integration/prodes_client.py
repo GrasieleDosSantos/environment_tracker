@@ -11,10 +11,28 @@ from typing import Any
 
 from pydantic import BaseModel, model_validator
 
+from src.config.constants import BIOMES
 from src.config.settings import get_settings
 from src.services.inpe_integration.base import BaseINPEClient
 from src.services.inpe_integration.cache_manager import get_cache_manager
 from src.utils.decorators import async_safe
+
+# Non-Amazon PRODES workspaces use yearly_deforestation (different schema from Amazon).
+# Verified live 2026-05-26: area_km (not area_km2), image_date, state (not uf).
+_PRODES_NONAZ_LAYERS: dict[str, str] = {
+    "cerrado":       "prodes-cerrado-nb:yearly_deforestation",
+    "caatinga":      "prodes-caatinga-nb:yearly_deforestation",
+    "mata_atlantica":"prodes-mata-atlantica-nb:yearly_deforestation",
+    "pampa":         "prodes-pampa-nb:yearly_deforestation",
+    "pantanal":      "prodes-pantanal-nb:yearly_deforestation",
+}
+
+_PRODES_NONAZ_ENDPOINTS: dict[str, str] = {
+    biome_id: f"https://terrabrasilis.dpi.inpe.br/geoserver/{ws.split(':')[0]}/ows"
+    for biome_id, ws in _PRODES_NONAZ_LAYERS.items()
+}
+
+_BIOME_DISPLAY: dict[str, str] = {b["id"]: b["name"] for b in BIOMES}
 
 
 class PRODESData(BaseModel):
@@ -215,3 +233,156 @@ def fetch_prodes_vintage(
     state: str | None = None, biome: str | None = None, years: int = 10
 ) -> list[PRODESData]:
     return _fetch_vintage_async(state, biome, years)  # type: ignore[return-value]
+
+
+# ------------------------------------------------------------------ #
+# Non-Amazon PRODES (yearly_deforestation schema)                       #
+# Schema: uid, state, year, area_km, main_class, class_name, image_date
+# ------------------------------------------------------------------ #
+
+class PRODESNonAmazonData(BaseModel):
+    """PRODES yearly deforestation for non-Amazon biomes."""
+
+    year: int | None = None
+    state: str | None = None
+    biome: str | None = None
+    area_km2: float | None = None
+    classname: str | None = None
+    image_date: date | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_feature(cls, v: Any) -> Any:
+        if not isinstance(v, dict):
+            return v
+        if "properties" not in v and "geometry" not in v:
+            return v
+        props = v.get("properties") or {}
+
+        raw_date = props.get("image_date")
+        parsed_date: date | None = None
+        if isinstance(raw_date, str):
+            try:
+                parsed_date = date.fromisoformat(raw_date[:10])
+            except ValueError:
+                pass
+        elif isinstance(raw_date, date):
+            parsed_date = raw_date
+
+        raw_year = props.get("year")
+        try:
+            year = int(raw_year) if raw_year is not None else (parsed_date.year if parsed_date else None)
+        except (ValueError, TypeError):
+            year = None
+
+        return {
+            "year": year,
+            "state": props.get("state") or props.get("uf"),
+            "biome": None,  # injected by caller based on which layer was queried
+            "area_km2": props.get("area_km"),
+            "classname": props.get("class_name") or props.get("main_class"),
+            "image_date": parsed_date,
+        }
+
+
+class PRODESNonAmazonClient(BaseINPEClient):
+    source_name = "PRODES"
+    default_cache_ttl = 2592000  # 30 days
+
+    def __init__(self, endpoint: str, layer: str) -> None:
+        settings = get_settings()
+        self.wfs_endpoint = endpoint
+        self.layer_name = layer
+        super().__init__(rate_limit=settings.rate_limit_prodes)
+        self._cache = get_cache_manager()
+
+    async def fetch_by_period(
+        self,
+        start_year: int | None = None,
+        end_year: int | None = None,
+        state: str | None = None,
+        count: int = 2000,
+    ) -> list[PRODESNonAmazonData]:
+        params: dict[str, Any] = {
+            "start_year": start_year, "end_year": end_year,
+            "state": state, "count": count,
+            "_layer": self.layer_name,
+        }
+        cache_key = self.build_cache_key(params)
+        if cached := self._cache.get(cache_key):
+            return [PRODESNonAmazonData.model_validate(f) for f in cached.get("features", [])]
+
+        filters: list[str] = []
+        if start_year:
+            filters.append(f"year >= {start_year}")
+        if end_year:
+            filters.append(f"year <= {end_year}")
+        if state:
+            filters.append(f"state = '{state.upper()}'")
+
+        try:
+            raw = await self._wfs_get_feature(
+                cql_filter=" AND ".join(filters) if filters else None,
+                count=count,
+            )
+        except Exception as exc:
+            import httpx
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 400:
+                return []
+            raise
+        self._cache.set(cache_key, self.source_name, raw, self.default_cache_ttl)
+        return self.parse_features(raw, PRODESNonAmazonData)
+
+
+@async_safe
+async def _fetch_prodes_multi_biome_async(
+    biome_ids: list[str],
+    state: str | None,
+    start_year: int | None,
+    end_year: int | None,
+    count: int,
+) -> list[PRODESData]:
+    """Fetch PRODES annual data across Amazon + non-Amazon biomes, normalised to PRODESData."""
+    results: list[PRODESData] = []
+
+    for biome_id in biome_ids:
+        if biome_id == "amazonia":
+            async with PRODESClient() as client:
+                data = await client.fetch_deforestation_by_period(
+                    start_year=start_year, end_year=end_year, state=state, count=count
+                )
+            results.extend(data)
+            continue
+
+        layer = _PRODES_NONAZ_LAYERS.get(biome_id)
+        endpoint = _PRODES_NONAZ_ENDPOINTS.get(biome_id)
+        if not layer or not endpoint:
+            continue
+
+        async with PRODESNonAmazonClient(endpoint=endpoint, layer=layer) as client:
+            raw_data = await client.fetch_by_period(
+                start_year=start_year, end_year=end_year, state=state, count=count
+            )
+
+        display = _BIOME_DISPLAY.get(biome_id, biome_id)
+        for r in raw_data:
+            results.append(PRODESData(
+                year=r.year,
+                state=r.state,
+                biome=display,
+                area_km2=r.area_km2,
+                municipality=None,
+            ))
+
+    return results
+
+
+def fetch_prodes_for_biomes(
+    biome_ids: list[str],
+    state: str | None = None,
+    start_year: int | None = None,
+    end_year: int | None = None,
+    count: int = 2000,
+) -> list[PRODESData]:
+    """Fetch PRODES annual deforestation across Amazon and all non-Amazon biomes."""
+    return _fetch_prodes_multi_biome_async(biome_ids, state, start_year, end_year, count)  # type: ignore[return-value]
