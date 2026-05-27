@@ -139,34 +139,38 @@ def render_biome_filter() -> list[str]:
     return selected
 
 
+_AMAZONIA_LEGAL_KEY = "AMAZONIA_LEGAL"
+
+
 def render_region_filter() -> list[str]:
-    """Render a state multiselect with an Amazônia Legal shortcut; return state codes."""
+    """Render a state multiselect; return state codes.
+
+    'Amazônia Legal' is exposed as a virtual option that expands to the
+    9 constituent state codes when selected.
+    """
     fs = get_filter_state()
 
-    col1, col2 = st.columns([3, 1])
+    state_options = [_AMAZONIA_LEGAL_KEY] + sorted(STATE_CODES)
+    state_labels = {
+        _AMAZONIA_LEGAL_KEY: "★ Amazônia Legal",
+        **{code: f"{code} — {STATES[code]}" for code in sorted(STATE_CODES)},
+    }
 
-    with col2:
-        legal_amazon = st.button(
-            "Amazônia Legal",
-            key="btn_legal_amazon",
-            help="Selecionar todos os estados da Amazônia Legal",
-            use_container_width=True,
-        )
+    selected_raw = st.multiselect(
+        "Estado / State",
+        options=state_options,
+        default=fs.states,
+        format_func=lambda x: state_labels.get(x, x),
+        key="filter_states",
+        help="Filtre por estado / Filter by state (UF)",
+    )
 
-    state_options = sorted(STATE_CODES)
-    state_labels = {code: f"{code} — {STATES[code]}" for code in state_options}
-
-    current = list(LEGAL_AMAZON_STATES) if legal_amazon else fs.states
-
-    with col1:
-        selected = st.multiselect(
-            "Estado / State",
-            options=state_options,
-            default=current,
-            format_func=lambda x: state_labels.get(x, x),
-            key="filter_states",
-            help="Filtre por estado / Filter by state (UF)",
-        )
+    # Expand the virtual Amazônia Legal option into its constituent states
+    if _AMAZONIA_LEGAL_KEY in selected_raw:
+        other = [s for s in selected_raw if s != _AMAZONIA_LEGAL_KEY]
+        selected = sorted(set(other) | set(LEGAL_AMAZON_STATES))
+    else:
+        selected = selected_raw
 
     fs = fs.model_copy(update={"states": selected})
     _save_filter_state(fs)

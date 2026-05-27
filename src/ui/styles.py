@@ -121,8 +121,10 @@ html, body, [class*="css"] {{
     margin-top: -0.5rem;
 }}
 
-/* ── Streamlit top bar / hamburger ──────────────────────────────── */
-[data-testid="stToolbar"] {{ display: none; }}
+/* ── Hide Streamlit branding; keep sidebar toggle accessible ─────── */
+[data-testid="stToolbarActions"] {{ display: none; }}
+#MainMenu {{ display: none; }}
+footer {{ display: none; }}
 
 /* ── Main content area ──────────────────────────────────────────── */
 .block-container {{

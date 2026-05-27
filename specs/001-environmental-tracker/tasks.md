@@ -128,8 +128,8 @@
 
 **Independent Test**: Navigate to Map page; confirm Brazil map loads within 4 seconds; click a fire hotspot marker and verify popup shows location, date, type, and severity.
 
-- [ ] T037 [US3] Create `src/ui/components/map.py`: `render_brazil_map()` with Folium, state boundary layer, fire hotspot markers (red), deforestation area polygons (orange), marker clustering for >500 points, popup template with event details
-- [ ] T038 [US3] Create `src/ui/pages/map_viewer.py`: integrates `map.py` (T037) and `filters.py` (T031); layer toggle controls (show/hide fires, deforestation, vegetation); zoom-to-region on filter change; freshness badge
+- [X] T037 [US3] Create `src/ui/components/map.py`: `render_brazil_map()` with Folium, state boundary layer, fire hotspot markers (red), deforestation area polygons (orange), marker clustering for >500 points, popup template with event details
+- [X] T038 [US3] Create `src/ui/pages/map_viewer.py`: integrates `map.py` (T037) and `filters.py` (T031); layer toggle controls (show/hide fires, deforestation, vegetation); zoom-to-region on filter change; freshness badge
 
 **Checkpoint**: Map loads with real data, markers are filterable, popups display correct INPE attribution.
 

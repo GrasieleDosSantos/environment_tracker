@@ -136,9 +136,21 @@ class FOGOClient(BaseINPEClient):
     # Public async API                                                      #
     # ------------------------------------------------------------------ #
 
+    @staticmethod
+    def _estado_filter(state: str | None, states: list[str] | None) -> str | None:
+        """Build a CQL estado predicate for single or multiple state codes."""
+        if states and len(states) > 1:
+            names = [f"'{STATES.get(s.upper(), s).upper()}'" for s in states]
+            return f"estado IN ({', '.join(names)})"
+        single = state or (states[0] if states else None)
+        if single:
+            return f"estado = '{STATES.get(single.upper(), single).upper()}'"
+        return None
+
     async def fetch_current_hotspots(
         self,
         state: str | None = None,
+        states: list[str] | None = None,
         biome: str | None = None,
         satellite: str | None = None,
         count: int = 5000,
@@ -146,6 +158,7 @@ class FOGOClient(BaseINPEClient):
         """Fetch hotspots from the pre-filtered 48-hour layer (no date filter needed)."""
         params: dict[str, Any] = {
             "state": state,
+            "states": sorted(states) if states else None,
             "biome": biome,
             "satellite": satellite,
             "count": count,
@@ -156,10 +169,8 @@ class FOGOClient(BaseINPEClient):
             return [FireHotspot.model_validate(f) for f in cached.get("features", [])]
 
         filters: list[str] = []
-        if state:
-            # estado field stores full name in uppercase; try exact match via lookup
-            state_name = STATES.get(state.upper(), state)
-            filters.append(f"estado = '{state_name.upper()}'")
+        if estado_pred := self._estado_filter(state, states):
+            filters.append(estado_pred)
         if biome:
             filters.append(f"bioma = '{biome}'")
         if satellite:
@@ -217,6 +228,7 @@ class FOGOClient(BaseINPEClient):
     async def fetch_fire_risk(
         self,
         state: str | None = None,
+        states: list[str] | None = None,
         biome: str | None = None,
         days: int = 7,
         count: int = 50000,
@@ -231,6 +243,7 @@ class FOGOClient(BaseINPEClient):
         params: dict[str, Any] = {
             "since": since.isoformat(),
             "state": state,
+            "states": sorted(states) if states else None,
             "biome": biome,
             "count": count,
             "_method": "risk",
@@ -243,9 +256,8 @@ class FOGOClient(BaseINPEClient):
         self.layer_name = "dados_abertos:focos_ano_atual_br_todosats"
 
         filters = [f"data_pas >= '{since.isoformat()}'"]
-        if state:
-            state_name = STATES.get(state.upper(), state)
-            filters.append(f"estado = '{state_name.upper()}'")
+        if estado_pred := self._estado_filter(state, states):
+            filters.append(estado_pred)
         if biome:
             filters.append(f"bioma = '{biome}'")
 
@@ -267,10 +279,14 @@ class FOGOClient(BaseINPEClient):
 
 @async_safe
 async def _fetch_current_async(
-    state: str | None, biome: str | None, satellite: str | None, count: int
+    state: str | None,
+    states: list[str] | None,
+    biome: str | None,
+    satellite: str | None,
+    count: int,
 ) -> list[FireHotspot]:
     async with FOGOClient() as client:
-        return await client.fetch_current_hotspots(state, biome, satellite, count)
+        return await client.fetch_current_hotspots(state, states, biome, satellite, count)
 
 
 @async_safe
@@ -283,19 +299,24 @@ async def _fetch_by_date_async(
 
 @async_safe
 async def _fetch_risk_async(
-    state: str | None, biome: str | None, days: int, count: int
+    state: str | None,
+    states: list[str] | None,
+    biome: str | None,
+    days: int,
+    count: int,
 ) -> list[FireHotspot]:
     async with FOGOClient() as client:
-        return await client.fetch_fire_risk(state, biome, days, count)
+        return await client.fetch_fire_risk(state, states, biome, days, count)
 
 
 def fetch_current_hotspots(
     state: str | None = None,
+    states: list[str] | None = None,
     biome: str | None = None,
     satellite: str | None = None,
     count: int = 5000,
 ) -> list[FireHotspot]:
-    return _fetch_current_async(state, biome, satellite, count)  # type: ignore[return-value]
+    return _fetch_current_async(state, states, biome, satellite, count)  # type: ignore[return-value]
 
 
 def fetch_hotspots_by_date(
@@ -311,8 +332,9 @@ def fetch_hotspots_by_date(
 
 def fetch_fire_risk(
     state: str | None = None,
+    states: list[str] | None = None,
     biome: str | None = None,
     days: int = 7,
     count: int = 50000,
 ) -> list[FireHotspot]:
-    return _fetch_risk_async(state, biome, days, count)  # type: ignore[return-value]
+    return _fetch_risk_async(state, states, biome, days, count)  # type: ignore[return-value]

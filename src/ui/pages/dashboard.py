@@ -64,20 +64,24 @@ def _load_deter(
 
 
 @st.cache_data(ttl=14400, show_spinner=False)
-def _load_fogo_48h(state: str | None, biome: str | None) -> list[dict]:
+def _load_fogo_48h(states_str: str | None, biome: str | None) -> list[dict]:
     from src.services.inpe_integration.fogo_client import fetch_current_hotspots
 
-    hotspots = fetch_current_hotspots(state=state, biome=biome, count=10000)
+    states = states_str.split(",") if states_str else None
+    single = states[0] if states and len(states) == 1 else None
+    multi = states if states and len(states) > 1 else None
+    hotspots = fetch_current_hotspots(state=single, states=multi, biome=biome, count=10000)
     return [h.model_dump(mode="json") for h in hotspots]
 
 
 @st.cache_data(ttl=14400, show_spinner=False)
-def _load_fogo_period(
-    state: str | None, biome: str | None, days: int
-) -> list[dict]:
+def _load_fogo_period(states_str: str | None, biome: str | None, days: int) -> list[dict]:
     from src.services.inpe_integration.fogo_client import fetch_fire_risk
 
-    hotspots = fetch_fire_risk(state=state, biome=biome, days=min(days, 90))
+    states = states_str.split(",") if states_str else None
+    single = states[0] if states and len(states) == 1 else None
+    multi = states if states and len(states) > 1 else None
+    hotspots = fetch_fire_risk(state=single, states=multi, biome=biome, days=min(days, 90))
     return [h.model_dump(mode="json") for h in hotspots]
 
 
@@ -159,12 +163,10 @@ with st.spinner("Carregando dados DETER... / Loading DETER data..."):
         deter_error = str(exc)
 
 with st.spinner("Carregando dados FOGO... / Loading FOGO data..."):
+    fogo_states_str = ",".join(sorted(fs.states)) if fs.states else None
     try:
-        fogo_raw_48h = _load_fogo_48h(single_state, None)
-        fogo_raw_period = _load_fogo_period(single_state, None, period_days)
-        if len(fs.states) > 1:
-            fogo_raw_48h = _filter_dicts(fogo_raw_48h, "state", fs.states)
-            fogo_raw_period = _filter_dicts(fogo_raw_period, "state", fs.states)
+        fogo_raw_48h = _load_fogo_48h(fogo_states_str, None)
+        fogo_raw_period = _load_fogo_period(fogo_states_str, None, period_days)
         if fs.biomes:
             fogo_raw_48h = _filter_biomes(fogo_raw_48h, fs.biomes)
             fogo_raw_period = _filter_biomes(fogo_raw_period, fs.biomes)
@@ -318,38 +320,39 @@ with col_ts2:
         render_freshness_badge(snapshot.fetched_at, label="FOGO")
 
 # ------------------------------------------------------------------ #
-# Geographic breakdown                                                  #
+# Geographic breakdown (hidden when a single state is selected)         #
 # ------------------------------------------------------------------ #
 
-col_geo1, col_geo2 = st.columns(2)
+if len(fs.states) != 1:
+    col_geo1, col_geo2 = st.columns(2)
 
-with col_geo1:
-    state_defor_df = deter_to_state_df(deter_alerts)
-    fig_states = bar_comparison_chart(
-        df=state_defor_df,
-        x="state",
-        y="area_km2",
-        title="Desmatamento por Estado / Deforestation by State",
-        source="INPE DETER",
-        orientation="h",
-        y_axis_label="km²",
-        top_n=10,
-    )
-    st.plotly_chart(fig_states, use_container_width=True)
+    with col_geo1:
+        state_defor_df = deter_to_state_df(deter_alerts)
+        fig_states = bar_comparison_chart(
+            df=state_defor_df,
+            x="state",
+            y="area_km2",
+            title="Desmatamento por Estado / Deforestation by State",
+            source="INPE DETER",
+            orientation="h",
+            y_axis_label="km²",
+            top_n=10,
+        )
+        st.plotly_chart(fig_states, use_container_width=True)
 
-with col_geo2:
-    state_fire_df = fogo_to_state_df(fogo_period)
-    fig_fire_state = bar_comparison_chart(
-        df=state_fire_df,
-        x="state",
-        y="count",
-        title="Focos por Estado / Hotspots by State",
-        source="INPE BDQueimadas",
-        orientation="h",
-        y_axis_label="Focos",
-        top_n=10,
-    )
-    st.plotly_chart(fig_fire_state, use_container_width=True)
+    with col_geo2:
+        state_fire_df = fogo_to_state_df(fogo_period)
+        fig_fire_state = bar_comparison_chart(
+            df=state_fire_df,
+            x="state",
+            y="count",
+            title="Focos por Estado / Hotspots by State",
+            source="INPE BDQueimadas",
+            orientation="h",
+            y_axis_label="Focos",
+            top_n=10,
+        )
+        st.plotly_chart(fig_fire_state, use_container_width=True)
 
 # ------------------------------------------------------------------ #
 # Density heatmap                                                       #
