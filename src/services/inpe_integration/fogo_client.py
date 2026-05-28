@@ -272,6 +272,175 @@ class FOGOClient(BaseINPEClient):
         self._cache.set(cache_key, self.source_name, raw, self.default_cache_ttl)
         return self.parse_features(raw, FireHotspot)
 
+    async def fetch_fire_monthly_counts(
+        self,
+        start: date,
+        end: date,
+        state: str | None = None,
+        states: list[str] | None = None,
+        biome: str | None = None,
+    ) -> list[dict]:
+        """Return monthly fire hotspot counts for a date range.
+
+        Uses ``resultType=hits`` (WFS 2.0.0) so no feature data is downloaded
+        — just the count per calendar month.  This avoids the ``count`` cap
+        truncation that occurs when querying individual records for large areas
+        like all of Brazil.
+
+        Returns a list of ``{"month": date(year, month, 1), "count": int}``
+        dicts, sorted ascending by month.  Months with zero hits are included
+        so the trend series has no gaps.
+        """
+        current_year = date.today().year
+        rows: list[dict] = []
+
+        geo_pred = self._estado_filter(state, states) or ""
+        biome_pred = f"bioma = '{biome}'" if biome else ""
+
+        # Iterate month by month
+        cur = date(start.year, start.month, 1)
+        while cur <= end:
+            month_end_day = (
+                date(cur.year + (cur.month // 12), (cur.month % 12) + 1, 1)
+                - __import__("datetime").timedelta(days=1)
+            )
+            range_start = max(start, cur)
+            range_end = min(end, month_end_day)
+
+            cache_key_data: dict[str, Any] = {
+                "start": range_start.isoformat(),
+                "end": range_end.isoformat(),
+                "state": state,
+                "states": sorted(states) if states else None,
+                "biome": biome,
+                "_method": "monthly_count",
+            }
+            cache_key = self.build_cache_key(cache_key_data)
+            cached = self._cache.get(cache_key)
+            # Only trust a cached entry that was written by a successful request
+            # (marked with "ok": True).  Entries written by failed hits requests
+            # lack this flag and will be overwritten with a fresh fetch.
+            if cached and cached.get("ok") is True:
+                rows.append({"month": cur, "count": cached["count"]})
+                cur = date(cur.year + (cur.month // 12), (cur.month % 12) + 1, 1)
+                continue
+
+            original_layer = self.layer_name
+            self.layer_name = (
+                "dados_abertos:focos_ano_atual_br_todosats"
+                if cur.year == current_year
+                else self._year_layer(cur.year)
+            )
+
+            filters = [
+                f"data_pas >= '{range_start.isoformat()}'",
+                f"data_pas <= '{range_end.isoformat()}'",
+            ]
+            if geo_pred:
+                filters.append(geo_pred)
+            if biome_pred:
+                filters.append(biome_pred)
+
+            try:
+                n = await self._wfs_hits_count(cql_filter=" AND ".join(filters))
+            except Exception:
+                n = -1
+            finally:
+                self.layer_name = original_layer
+
+            if n >= 0:
+                # Cache successful results; mark with "ok" so stale error entries
+                # are not reused next request.
+                ttl = 86400 if range_end < date.today() else self.default_cache_ttl
+                self._cache.set(cache_key, self.source_name, {"count": n, "ok": True}, ttl)
+                rows.append({"month": cur, "count": n})
+            else:
+                # Request failed — do not cache; append 0 so the series has no gap
+                rows.append({"month": cur, "count": 0})
+
+            # Advance to next month
+            cur = date(cur.year + (cur.month // 12), (cur.month % 12) + 1, 1)
+
+        return rows
+
+    async def fetch_fire_time_series(
+        self,
+        start: date,
+        end: date,
+        state: str | None = None,
+        states: list[str] | None = None,
+        biome: str | None = None,
+        count_per_year: int = 50000,
+    ) -> list[FireHotspot]:
+        """Fetch hotspots across a multi-year date range.
+
+        Splits the request by calendar year so each year's dedicated layer
+        (``focos_YYYY_br_todosats``) is queried, with the current year using
+        ``focos_ano_atual_br_todosats``.  Results are merged and returned as a
+        flat list.
+
+        This is the correct function for trend analysis that spans more than
+        one calendar year.  ``fetch_fire_risk`` must NOT be used for this
+        purpose because it is bound to the current-year layer.
+        """
+        current_year = date.today().year
+        results: list[FireHotspot] = []
+
+        # Iterate over each calendar year that overlaps [start, end]
+        for year in range(start.year, end.year + 1):
+            year_start = max(start, date(year, 1, 1))
+            year_end = min(end, date(year, 12, 31))
+
+            original_layer = self.layer_name
+            self.layer_name = (
+                "dados_abertos:focos_ano_atual_br_todosats"
+                if year == current_year
+                else self._year_layer(year)
+            )
+
+            params: dict[str, Any] = {
+                "start": year_start.isoformat(),
+                "end": year_end.isoformat(),
+                "state": state,
+                "states": sorted(states) if states else None,
+                "biome": biome,
+                "_method": "time_series",
+            }
+            cache_key = self.build_cache_key(params)
+            if cached := self._cache.get(cache_key):
+                results.extend(
+                    FireHotspot.model_validate(f)
+                    for f in cached.get("features", [])
+                )
+                self.layer_name = original_layer
+                continue
+
+            filters = [
+                f"data_pas >= '{year_start.isoformat()}'",
+                f"data_pas <= '{year_end.isoformat()}'",
+            ]
+            if estado_pred := self._estado_filter(state, states):
+                filters.append(estado_pred)
+            if biome:
+                filters.append(f"bioma = '{biome}'")
+
+            try:
+                raw = await self._wfs_get_feature(
+                    cql_filter=" AND ".join(filters),
+                    count=count_per_year,
+                )
+            except Exception:
+                raw = {"features": []}
+            finally:
+                self.layer_name = original_layer
+
+            # Cache past years for 24h; current year for standard TTL
+            ttl = 86400 if year < current_year else self.default_cache_ttl
+            self._cache.set(cache_key, self.source_name, raw, ttl)
+            results.extend(self.parse_features(raw, FireHotspot))
+
+        return results
+
 
 # ------------------------------------------------------------------ #
 # Synchronous convenience wrappers (Streamlit-safe via @async_safe)    #
@@ -338,3 +507,63 @@ def fetch_fire_risk(
     count: int = 50000,
 ) -> list[FireHotspot]:
     return _fetch_risk_async(state, states, biome, days, count)  # type: ignore[return-value]
+
+
+@async_safe
+async def _fetch_time_series_async(
+    start: date,
+    end: date,
+    state: str | None,
+    states: list[str] | None,
+    biome: str | None,
+    count_per_year: int,
+) -> list[FireHotspot]:
+    async with FOGOClient() as client:
+        return await client.fetch_fire_time_series(start, end, state, states, biome, count_per_year)
+
+
+def fetch_fire_time_series(
+    start: date,
+    end: date,
+    state: str | None = None,
+    states: list[str] | None = None,
+    biome: str | None = None,
+    count_per_year: int = 50000,
+) -> list[FireHotspot]:
+    """Fetch fire hotspots across a multi-year date range for trend analysis.
+
+    Uses per-year WFS layers so historical data from previous calendar years
+    is correctly included.  Use this instead of ``fetch_fire_risk`` whenever
+    the query spans more than one year.
+    """
+    return _fetch_time_series_async(start, end, state, states, biome, count_per_year)  # type: ignore[return-value]
+
+
+@async_safe
+async def _fetch_monthly_counts_async(
+    start: date,
+    end: date,
+    state: str | None,
+    states: list[str] | None,
+    biome: str | None,
+) -> list[dict]:
+    async with FOGOClient() as client:
+        return await client.fetch_fire_monthly_counts(start, end, state, states, biome)
+
+
+def fetch_fire_monthly_counts(
+    start: date,
+    end: date,
+    state: str | None = None,
+    states: list[str] | None = None,
+    biome: str | None = None,
+) -> list[dict]:
+    """Return monthly fire hotspot counts using WFS resultType=hits.
+
+    No individual records are downloaded — each month is a lightweight count
+    query.  Use for trend analysis to avoid the count-cap truncation that
+    occurs when fetching individual hotspot records for large regions.
+
+    Returns a list of ``{"month": date, "count": int}`` dicts.
+    """
+    return _fetch_monthly_counts_async(start, end, state, states, biome)  # type: ignore[return-value]

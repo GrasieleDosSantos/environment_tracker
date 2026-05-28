@@ -299,7 +299,7 @@ with col_ts1:
         y_axis_label="km²",
         area=True,
     )
-    st.plotly_chart(fig_defor, use_container_width=True)
+    st.plotly_chart(fig_defor, width="stretch")
     if deter_alerts:
         render_freshness_badge(snapshot.fetched_at, label="DETER")
 
@@ -315,7 +315,7 @@ with col_ts2:
         y_axis_label="Focos",
         colors=[PALETTE["accent_orange"]],
     )
-    st.plotly_chart(fig_fire, use_container_width=True)
+    st.plotly_chart(fig_fire, width="stretch")
     if fogo_period:
         render_freshness_badge(snapshot.fetched_at, label="FOGO")
 
@@ -338,7 +338,7 @@ if len(fs.states) != 1:
             y_axis_label="km²",
             top_n=10,
         )
-        st.plotly_chart(fig_states, use_container_width=True)
+        st.plotly_chart(fig_states, width="stretch")
 
     with col_geo2:
         state_fire_df = fogo_to_state_df(fogo_period)
@@ -352,7 +352,7 @@ if len(fs.states) != 1:
             y_axis_label="Focos",
             top_n=10,
         )
-        st.plotly_chart(fig_fire_state, use_container_width=True)
+        st.plotly_chart(fig_fire_state, width="stretch")
 
 # ------------------------------------------------------------------ #
 # Density heatmap                                                       #
@@ -367,7 +367,7 @@ fig_heat = spatial_heatmap(
     source="INPE BDQueimadas",
     value_col="frp",
 )
-st.plotly_chart(fig_heat, use_container_width=True)
+st.plotly_chart(fig_heat, width="stretch")
 render_data_source_caption(
     "INPE BDQueimadas",
     layer="dados_abertos:focos_48h_br_todosats",

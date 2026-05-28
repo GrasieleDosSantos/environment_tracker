@@ -114,6 +114,81 @@ class BaseINPEClient(ABC):
     # Core WFS request                                                      #
     # ------------------------------------------------------------------ #
 
+    async def _wfs_hits_count(
+        self,
+        cql_filter: str | None = None,
+    ) -> int:
+        """Return the total feature count matching *cql_filter*.
+
+        Strategy (in order):
+        1. Regular GetFeature with count=1 — WFS 2.0.0 always returns
+           ``numberMatched`` (total) and ``numberReturned`` (fetched) in the
+           GeoJSON FeatureCollection envelope.  Reading ``numberMatched`` gives
+           the exact total without downloading all features.
+        2. If ``numberMatched`` is absent (older server), fall back to
+           ``totalFeatures`` (GeoServer legacy field).
+        3. If neither field is present, return the length of the features
+           array in the response (inaccurate for truncated results but better
+           than returning -1 silently).
+
+        Note: ``resultType=hits`` is intentionally NOT used here because the
+        INPE WFS server returns an empty or non-JSON body for hits requests.
+        """
+        if self._circuit_breaker.is_open():
+            raise RuntimeError(
+                f"{self.source_name} circuit breaker is OPEN — "
+                "service is temporarily unavailable"
+            )
+        if self._client is None:
+            raise RuntimeError(
+                f"{self.__class__.__name__} must be used as an async context manager"
+            )
+
+        await self._rate_limiter.acquire()
+
+        params: dict[str, str] = {
+            "service": "WFS",
+            "version": "2.0.0",
+            "request": "GetFeature",
+            "typeName": self.layer_name,
+            "outputFormat": "application/json",
+            "count": "1",   # fetch only 1 record; numberMatched reports the total
+        }
+        if cql_filter:
+            params["CQL_FILTER"] = cql_filter
+
+        self._log.debug(
+            "wfs_count_request",
+            source=self.source_name,
+            layer=self.layer_name,
+            filter=cql_filter,
+        )
+
+        # Historical biome queries can take 30–60 s on the INPE WFS; use a longer
+        # per-request timeout so slow-but-valid responses aren't dropped.
+        _count_timeout = httpx.Timeout(120.0, connect=10.0)
+
+        try:
+            resp = await self._client.get(
+                self.wfs_endpoint, params=params, timeout=_count_timeout
+            )
+            resp.raise_for_status()
+            self._circuit_breaker.record_success()
+            data = resp.json()
+            # Prefer numberMatched (WFS 2.0.0 standard)
+            for field in ("numberMatched", "totalFeatures"):
+                val = data.get(field)
+                if val is not None:
+                    try:
+                        return int(val)
+                    except (ValueError, TypeError):
+                        pass
+            # Last resort: count the features actually returned
+            return len(data.get("features", []))
+        except Exception as exc:
+            self._log.warning("wfs_hits_error", source=self.source_name, error=str(exc))
+            return -1
+
     async def _wfs_get_feature(
         self,
         cql_filter: str | None = None,

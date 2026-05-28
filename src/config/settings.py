@@ -1,10 +1,20 @@
+from pathlib import Path
+
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Load .env into os.environ so third-party libraries that read env vars
+# directly (e.g. langfuse.openai drop-in) can find the credentials.
+for _candidate in (Path(".env"), Path("src/.env")):
+    if _candidate.exists():
+        load_dotenv(_candidate, override=False)
+        break
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "src/.env"),  # project root first, then src/ fallback
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

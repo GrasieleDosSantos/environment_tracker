@@ -141,15 +141,15 @@
 
 **Independent Test**: Start the app, open Conversation page; ask "Qual é a situação atual de queimadas no Cerrado?"; verify a Portuguese response with INPE data citation is returned within 3 seconds; ask a follow-up "E nas últimas duas semanas?" and verify context is preserved.
 
-- [ ] T039 [US1] Create `src/services/llm_provider.py`: `LLMProvider` abstract base; `OpenAIProvider` concrete implementation; provider is configured via `settings.py`; all downstream services call `LLMProvider`, never the OpenAI SDK directly
-- [ ] T040 [P] [US1] Create `src/config/langfuse_config.py`: initialize Langfuse SDK from env vars (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_ENDPOINT); provide `get_langfuse_client()` singleton
-- [ ] T041 [P] [US1] Create `src/services/conversation/prompts.py`: Portuguese-first system prompt (default PT-BR, switch to EN on English input); INPE citation requirement; data freshness warning rule (>12h); few-shot examples for biome/state extraction in Portuguese with English equivalents
-- [ ] T042 [P] [US1] Create `src/services/conversation/query_parser.py`: `parse_query(text) -> ParsedQuery`; extracts geographic context (region/biome/coordinates), metric of interest (deforestation/fire/vegetation), temporal scope, and language (PT/EN auto-detect); handles "São Paulo" ambiguity by returning clarification options
-- [ ] T043 [P] [US1] Create `src/services/conversation/session_manager.py`: `create_session()`, `add_message()`, `get_context()`, `save_session()` — persists `ConversationSession` to SQLite via `src/database/`
-- [ ] T044 [US1] Create `src/services/conversation/response_generator.py`: `format_data_context()` (converts Pydantic models to readable markdown), `add_citations()` (appends INPE attribution), `format_time_content()` (adds freshness info)
-- [ ] T045 [US1] Create `src/services/conversation/langfuse_wrapper.py`: `@trace_llm_call` decorator (logs inputs/outputs, token counts, cost), `@trace_langgraph_node` as a no-op stub reserved for the post-MVP LangGraph upgrade, session correlation (Streamlit session_id → Langfuse trace_id)
-- [ ] T046 [US1] Create `src/services/conversation/conversation_engine.py`: implement `ConversationService` (message history + `LLMProvider` call + `SessionManager`) as a linear pipeline — parse_query → retrieve_data → generate_response → update_context; all LLM calls go through `langfuse_wrapper.py`; LangGraph is the documented post-MVP upgrade path but not implemented here
-- [ ] T047 [US1] Create `src/ui/pages/conversation.py`: Streamlit chat UI with `st.chat_message`, session history display, query input (placeholder text in Portuguese), geographic context chip showing active region/biome, Langfuse session ID stored in `st.session_state`
+- [X] T039 [US1] Create `src/services/llm_provider.py`: `LLMProvider` abstract base; `OpenAIProvider` concrete implementation; provider is configured via `settings.py`; all downstream services call `LLMProvider`, never the OpenAI SDK directly
+- [X] T040 [P] [US1] Create `src/config/langfuse_config.py`: initialize Langfuse SDK from env vars (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_ENDPOINT); provide `get_langfuse_client()` singleton
+- [X] T041 [P] [US1] Create `src/services/conversation/prompts.py`: Portuguese-first system prompt (default PT-BR, switch to EN on English input); INPE citation requirement; data freshness warning rule (>12h); few-shot examples for biome/state extraction in Portuguese with English equivalents
+- [X] T042 [P] [US1] Create `src/services/conversation/query_parser.py`: `parse_query(text) -> ParsedQuery`; extracts geographic context (region/biome/coordinates), metric of interest (deforestation/fire/vegetation), temporal scope, and language (PT/EN auto-detect); handles "São Paulo" ambiguity by returning clarification options
+- [X] T043 [P] [US1] Create `src/services/conversation/session_manager.py`: `create_session()`, `add_message()`, `get_context()`, `save_session()` — persists `ConversationSession` to SQLite via `src/database/`
+- [X] T044 [US1] Create `src/services/conversation/response_generator.py`: `format_data_context()` (converts Pydantic models to readable markdown), `add_citations()` (appends INPE attribution), `format_time_content()` (adds freshness info)
+- [X] T045 [US1] Create `src/services/conversation/langfuse_wrapper.py`: `@trace_llm_call` decorator (logs inputs/outputs, token counts, cost), `@trace_langgraph_node` as a no-op stub reserved for the post-MVP LangGraph upgrade, session correlation (Streamlit session_id → Langfuse trace_id)
+- [X] T046 [US1] Create `src/services/conversation/conversation_engine.py`: implement `ConversationService` (message history + `LLMProvider` call + `SessionManager`) as a linear pipeline — parse_query → retrieve_data → generate_response → update_context; all LLM calls go through `langfuse_wrapper.py`; LangGraph is the documented post-MVP upgrade path but not implemented here
+- [X] T047 [US1] Create `src/ui/pages/conversation.py`: Streamlit chat UI with `st.chat_message`, session history display, query input (placeholder text in Portuguese), geographic context chip showing active region/biome, Langfuse session ID stored in `st.session_state`
 
 **Checkpoint**: Multi-turn PT/EN conversations work end-to-end; INPE data cited; Langfuse dashboard shows traces and costs.
 
@@ -175,9 +175,9 @@
 
 **Independent Test**: Select "Amazon" biome, "deforestation" metric, last 24 months; confirm trend chart renders with correct direction indicator; export CSV and verify it contains INPE attribution header and correct values.
 
-- [ ] T051 [US5] Create `src/services/analysis/trend_analyzer.py`: `calculate_trend(series) -> TrendInfo` (direction, slope, confidence), `seasonal_decomposition()`, `compare_periods(period_a, period_b) -> dict` (% change, absolute values)
-- [ ] T052 [P] [US5] Create `src/services/data_export.py`: `export_csv(data, filename)` and `export_pdf(chart, data, filename)` — both include INPE data source attribution header and collection timestamps
-- [ ] T053 [US5] Create `src/ui/pages/trends.py`: region/biome/metric selectors, configurable date range, trend line with direction indicator, side-by-side period comparison panel, export buttons using `data_export.py`
+- [X] T051 [US5] Create `src/services/analysis/trend_analyzer.py`: `calculate_trend(series) -> TrendInfo` (direction, slope, confidence), `seasonal_decomposition()`, `compare_periods(period_a, period_b) -> dict` (% change, absolute values)
+- [X] T052 [P] [US5] Create `src/services/data_export.py`: `export_csv(data, filename)` and `export_pdf(chart, data, filename)` — both include INPE data source attribution header and collection timestamps
+- [X] T053 [US5] Create `src/ui/pages/trends.py`: region/biome/metric selectors, configurable date range, trend line with direction indicator, side-by-side period comparison panel, export buttons using `data_export.py`
 - [X] T054 [P] [US5] Create `src/ui/pages/about.py`: INPE data sources list with endpoints, data definitions (DETER/PRODES/FOGO), update frequency table, citation guidelines
 
 **Checkpoint**: Trend analysis returns data for at least 24 months; period comparison calculates correct % change; CSV export downloads with proper attribution.
