@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import folium
+import streamlit as st
 from branca.element import MacroElement
 from folium.plugins import FastMarkerCluster, MarkerCluster
 from jinja2 import Template
@@ -106,27 +107,19 @@ class _MapLegend(MacroElement):
 
 
 # ------------------------------------------------------------------ #
-# GeoJSON loaders (module-level cache — loaded once per process)       #
+# GeoJSON loaders — cached permanently (static reference data)         #
 # ------------------------------------------------------------------ #
 
-_states_geojson: dict | None = None
-_biomes_geojson: dict | None = None
-
-
+@st.cache_data(ttl=None, show_spinner=False)
 def _load_states() -> dict:
-    global _states_geojson
-    if _states_geojson is None:
-        with open(_DATA_DIR / "states.geojson", encoding="utf-8") as f:
-            _states_geojson = json.load(f)
-    return _states_geojson
+    with open(_DATA_DIR / "states.geojson", encoding="utf-8") as f:
+        return json.load(f)
 
 
+@st.cache_data(ttl=None, show_spinner=False)
 def _load_biomes() -> dict:
-    global _biomes_geojson
-    if _biomes_geojson is None:
-        with open(_DATA_DIR / "biomes.geojson", encoding="utf-8") as f:
-            _biomes_geojson = json.load(f)
-    return _biomes_geojson
+    with open(_DATA_DIR / "biomes.geojson", encoding="utf-8") as f:
+        return json.load(f)
 
 
 # ------------------------------------------------------------------ #

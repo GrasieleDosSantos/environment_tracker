@@ -17,20 +17,25 @@ from src.services.inpe_integration.base import BaseINPEClient
 from src.services.inpe_integration.cache_manager import get_cache_manager
 from src.utils.decorators import async_safe
 
-# Non-Amazon PRODES workspaces use yearly_deforestation (different schema from Amazon).
-# Verified live 2026-05-26: area_km (not area_km2), image_date, state (not uf).
-_PRODES_NONAZ_LAYERS: dict[str, str] = {
-    "cerrado":       "prodes-cerrado-nb:yearly_deforestation",
-    "caatinga":      "prodes-caatinga-nb:yearly_deforestation",
-    "mata_atlantica":"prodes-mata-atlantica-nb:yearly_deforestation",
-    "pampa":         "prodes-pampa-nb:yearly_deforestation",
-    "pantanal":      "prodes-pantanal-nb:yearly_deforestation",
+# All PRODES biome layers — verified live 2026-05-29.
+# All use the same schema: area_km (not area_km2), image_date, state.
+_PRODES_BIOME_LAYERS: dict[str, str] = {
+    "amazonia":       "prodes-amazon-nb:yearly_deforestation_biome",
+    "cerrado":        "prodes-cerrado-nb:yearly_deforestation",
+    "caatinga":       "prodes-caatinga-nb:yearly_deforestation",
+    "mata_atlantica": "prodes-mata-atlantica-nb:yearly_deforestation",
+    "pampa":          "prodes-pampa-nb:yearly_deforestation",
+    "pantanal":       "prodes-pantanal-nb:yearly_deforestation",
 }
 
-_PRODES_NONAZ_ENDPOINTS: dict[str, str] = {
+_PRODES_BIOME_ENDPOINTS: dict[str, str] = {
     biome_id: f"https://terrabrasilis.dpi.inpe.br/geoserver/{ws.split(':')[0]}/ows"
-    for biome_id, ws in _PRODES_NONAZ_LAYERS.items()
+    for biome_id, ws in _PRODES_BIOME_LAYERS.items()
 }
+
+# Keep old names as aliases for backwards compatibility
+_PRODES_NONAZ_LAYERS = _PRODES_BIOME_LAYERS
+_PRODES_NONAZ_ENDPOINTS = _PRODES_BIOME_ENDPOINTS
 
 _BIOME_DISPLAY: dict[str, str] = {b["id"]: b["name"] for b in BIOMES}
 
@@ -72,7 +77,8 @@ class PRODESData(BaseModel):
             "year": year,
             "state": _first("state", "STATE", "uf", "UF"),
             "biome": _first("biome", "BIOME", "bioma", "BIOMA"),
-            "area_km2": _first("area_km2", "AREA_KM2", "areakm2", "AREAKM2", "incremento"),
+            # All PRODES layers return area_km; area_km2/incremento kept for legacy cache
+            "area_km2": _first("area_km", "area_km2", "AREA_KM2", "areakm2", "AREAKM2", "incremento"),
             "municipality": _first("municipio", "MUNICIPIO", "municipality"),
             "geometry_type": geom.get("type"),
             "geometry_coordinates": geom.get("coordinates"),
@@ -81,7 +87,7 @@ class PRODESData(BaseModel):
 
 class PRODESClient(BaseINPEClient):
     source_name = "PRODES"
-    layer_name = "prodes-amz-nb:yearly_deforestation_biome"
+    layer_name = "prodes-amazon-nb:yearly_deforestation_biome"
     default_cache_ttl = 2592000  # 30 days
 
     def __init__(self) -> None:
@@ -342,20 +348,16 @@ async def _fetch_prodes_multi_biome_async(
     end_year: int | None,
     count: int,
 ) -> list[PRODESData]:
-    """Fetch PRODES annual data across Amazon + non-Amazon biomes, normalised to PRODESData."""
+    """Fetch PRODES annual data across any combination of biomes, normalised to PRODESData.
+
+    All six biomes (including Amazônia) now use PRODESNonAmazonClient since they
+    share the same WFS schema (area_km, state, year, image_date).
+    """
     results: list[PRODESData] = []
 
     for biome_id in biome_ids:
-        if biome_id == "amazonia":
-            async with PRODESClient() as client:
-                data = await client.fetch_deforestation_by_period(
-                    start_year=start_year, end_year=end_year, state=state, count=count
-                )
-            results.extend(data)
-            continue
-
-        layer = _PRODES_NONAZ_LAYERS.get(biome_id)
-        endpoint = _PRODES_NONAZ_ENDPOINTS.get(biome_id)
+        layer = _PRODES_BIOME_LAYERS.get(biome_id)
+        endpoint = _PRODES_BIOME_ENDPOINTS.get(biome_id)
         if not layer or not endpoint:
             continue
 

@@ -205,8 +205,17 @@ _TEMPORAL_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         _u + r"ltimos?\s*[39]0\s*dias?|last\s*[39]0\s*days?|" + _u + r"ltimos?\s*3\s*meses?",
         re.I,
     ), "last_90_days"),
-    (re.compile(r"\b(esse?\s*ano|this\s*year|ano\s*atual)\b", re.I), "last_year"),
+    (re.compile(r"\b(esse?\s*ano|este\s*ano|this\s*year|ano\s*atual)\b", re.I), "last_year"),
     (re.compile(_u + r"ltimos?\s*12\s*meses?|last\s*12\s*months?", re.I), "last_12_months"),
+    # Multi-year ranges — matched before month patterns to avoid false positives
+    (re.compile(_u + r"ltimos?\s*[23]\s*anos?|last\s*[23]\s*years?", re.I), "last_3_years"),
+    (re.compile(_u + r"ltimos?\s*[45]\s*anos?|last\s*[45]\s*years?", re.I), "last_5_years"),
+    (re.compile(_u + r"ltimos?\s*[67]\s*anos?|last\s*[67]\s*years?", re.I), "last_7_years"),
+    (re.compile(
+        _u + r"ltimos?\s*(?:8|9|10|11|12|13|14|15|20)\s*anos?"
+        r"|last\s*(?:8|9|10|11|12|13|14|15|20)\s*years?",
+        re.I,
+    ), "last_10_years"),
     # Month names (PT + EN) — treated as "last 30 days" approximation
     (re.compile(
         r"\b(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro"
@@ -232,6 +241,7 @@ _VALID_METRICS: frozenset[str] = frozenset(["fire", "deforestation", "vegetation
 _VALID_TEMPORAL_SCOPES: frozenset[str] = frozenset([
     "last_1_day", "last_7_days", "last_14_days", "last_30_days",
     "last_90_days", "last_year", "last_12_months",
+    "last_3_years", "last_5_years", "last_7_years", "last_10_years",
 ])
 
 _LLM_ENTITY_SYSTEM_PROMPT = """\

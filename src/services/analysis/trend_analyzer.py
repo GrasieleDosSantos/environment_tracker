@@ -333,6 +333,39 @@ def compare_periods(
 # Convenience builders from raw INPE records                            #
 # ------------------------------------------------------------------ #
 
+def prodes_annual_series(
+    records: list,
+    state: str | None = None,
+    biome: str | None = None,
+) -> pd.DataFrame:
+    """Convert PRODESData records to an annual area DataFrame ``[year_date, area_km2]``.
+
+    ``year_date`` is ``date(year, 1, 1)`` so the same trend/smoothing functions
+    work without modification.  Records are filtered by *state* and/or *biome*
+    when provided, then summed per calendar year.
+    """
+    if not records:
+        return pd.DataFrame(columns=["year_date", "area_km2"])
+
+    if state:
+        records = [r for r in records if (r.state or "").upper() == state.upper()]
+    if biome:
+        records = [r for r in records if (r.biome or "").lower() == biome.lower()]
+
+    rows = [
+        {"year": r.year, "area_km2": r.area_km2 or 0.0}
+        for r in records
+        if r.year is not None
+    ]
+    if not rows:
+        return pd.DataFrame(columns=["year_date", "area_km2"])
+
+    df = pd.DataFrame(rows)
+    annual = df.groupby("year")["area_km2"].sum().reset_index()
+    annual["year_date"] = pd.to_datetime(annual["year"].astype(str) + "-01-01")
+    return annual[["year_date", "area_km2"]].sort_values("year_date").reset_index(drop=True)
+
+
 def fire_monthly_series(
     hotspots: list,
     state: str | None = None,

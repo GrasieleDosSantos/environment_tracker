@@ -140,6 +140,75 @@ def format_deforestation_detail(alerts: list) -> str:
     return "\n".join(lines)
 
 
+def format_prodes_detail(records: list) -> str:
+    """Summarise PRODES annual deforestation records for the LLM prompt.
+
+    Produces a year-by-biome table so the LLM can discuss trends and
+    compare biomes across years.
+    """
+    if not records:
+        return "*Sem dados PRODES disponíveis / No PRODES data available.*"
+
+    from collections import defaultdict
+
+    biome_years: dict[str, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+    for r in records:
+        if r.year is not None and r.area_km2 is not None:
+            biome_years[r.biome or "Não informado"][r.year] += r.area_km2
+
+    if not biome_years:
+        return "*Sem dados PRODES disponíveis / No PRODES data available.*"
+
+    all_years = sorted({yr for yd in biome_years.values() for yr in yd}, reverse=True)
+    all_biomes = sorted(biome_years.keys())
+
+    lines = ["**Desmatamento anual PRODES (km²) / Annual PRODES Deforestation (km²)**"]
+
+    if len(all_biomes) == 1:
+        # Single biome: simple year list
+        biome = all_biomes[0]
+        lines.append(f"*Bioma: {biome}*")
+        lines.append("")
+        lines += ["| Ano | Área (km²) |", "|-----|------------|"]
+        for yr in all_years:
+            area = biome_years[biome].get(yr, 0.0)
+            lines.append(f"| {yr} | {area:,.1f} |")
+    else:
+        # Multiple biomes: cross-tab
+        header = "| Bioma | " + " | ".join(str(y) for y in all_years) + " |"
+        sep = "|-------" + "|------" * len(all_years) + "|"
+        lines += [header, sep]
+        for biome in all_biomes:
+            row = f"| {biome}"
+            for yr in all_years:
+                row += f" | {biome_years[biome].get(yr, 0.0):,.1f}"
+            row += " |"
+            lines.append(row)
+
+    # Warn when any year hit the record cap (partial sample)
+    year_counts: dict[int, int] = {}
+    for r in records:
+        if r.year is not None:
+            year_counts[r.year] = year_counts.get(r.year, 0) + 1
+    capped_years = [yr for yr, n in year_counts.items() if n >= 5000]
+
+    lines += [""]
+    if capped_years:
+        lines.append(
+            f"*⚠️ Totais baseados em amostra parcial (máx. 5 000 registros/ano) "
+            f"para {', '.join(str(y) for y in sorted(capped_years))}. "
+            f"Tendência direcional é confiável; valores absolutos são aproximados. "
+            f"/ Totals based on a partial sample (max 5 000 records/year) for "
+            f"{', '.join(str(y) for y in sorted(capped_years))}. "
+            f"Directional trend is reliable; absolute values are approximate.*"
+        )
+    lines.append(
+        "*Fonte: PRODES/INPE — dados anuais, atualização ~novembro. "
+        "Source: PRODES/INPE — annual data, updated ~November.*"
+    )
+    return "\n".join(lines)
+
+
 # ------------------------------------------------------------------ #
 # Post-processing                                                       #
 # ------------------------------------------------------------------ #

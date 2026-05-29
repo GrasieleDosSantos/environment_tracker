@@ -188,11 +188,11 @@
 
 **Purpose**: Wire all pages into navigation, finalize documentation, and validate performance targets.
 
-- [ ] T055 Update `src/app.py` to wire all 6 pages into `st.navigation()`: Conversation, Dashboard, Map, Alerts, Trends, About — with Portuguese page labels
-- [ ] T056 [P] Apply `@st.cache_data(ttl=3600)` to all static geographic data loads in `geospatial.py` and `map.py`; profile map rendering with 10,000+ markers and confirm no degradation
-- [ ] T057 [P] Security hardening: audit that no API keys are logged, all INPE responses pass Pydantic validation before use, rate limiter in `BaseINPEClient` tested under load
-- [ ] T058 [P] Update `README.md` to finalize: architecture diagram, full environment configuration reference, and any sections deferred from T005
-- [ ] T059 Run end-to-end validation: `uv sync` → configure `.env` → `alembic upgrade head` → `streamlit run src/app.py`; verify all 6 pages load; verify INPE data appears with freshness badge; verify Portuguese conversation round-trip
+- [X] T055 Update `src/app.py` to wire all 6 pages into `st.navigation()`: Conversation, Dashboard, Map, Alerts, Trends, About — with Portuguese page labels
+- [X] T056 [P] Apply `@st.cache_data(ttl=3600)` to all static geographic data loads in `geospatial.py` and `map.py`; profile map rendering with 10,000+ markers and confirm no degradation
+- [X] T057 [P] Security hardening: audit that no API keys are logged, all INPE responses pass Pydantic validation before use, rate limiter in `BaseINPEClient` tested under load
+- [X] T058 [P] Update `README.md` to finalize: architecture diagram, full environment configuration reference, and any sections deferred from T005
+- [X] T059 Run end-to-end validation: `uv sync` → configure `.env` → `alembic upgrade head` → `streamlit run src/app.py`; verify all 6 pages load; verify INPE data appears with freshness badge; verify Portuguese conversation round-trip
 
 ---
 

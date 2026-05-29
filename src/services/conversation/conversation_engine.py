@@ -30,6 +30,7 @@ from src.services.conversation.response_generator import (
     format_deforestation_detail,
     format_fire_detail,
     format_freshness_warning,
+    format_prodes_detail,
 )
 from src.services.conversation.session_manager import (
     add_message,
@@ -119,19 +120,70 @@ class ConversationReply:
 # Data retrieval                                                        #
 # ------------------------------------------------------------------ #
 
+_DETER_COVERED_BIOMES: frozenset[str] = frozenset({"amazonia", "cerrado"})
+
+
+def _fetch_prodes_per_year(
+    biome_ids: list[str],
+    state: str | None,
+    start_year: int,
+    end_year: int,
+) -> list:
+    """Fetch PRODES records year-by-year in parallel so each year is fully sampled.
+
+    A single multi-year WFS query returns records in insertion order (oldest first),
+    causing the 5 000-record cap to be consumed by one year only.  Per-year queries
+    guarantee every year is represented with its own 5 000-record sample, and parallel
+    execution keeps the wall-clock time comparable to a single request.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from src.services.inpe_integration.prodes_client import fetch_prodes_for_biomes
+
+    years = list(range(start_year, end_year + 1))
+
+    all_records: list = []
+    with ThreadPoolExecutor(max_workers=min(len(years), 4)) as executor:
+        futures = {
+            executor.submit(
+                fetch_prodes_for_biomes,
+                biome_ids=biome_ids,
+                state=state,
+                start_year=yr,
+                end_year=yr,
+                count=5000,
+            ): yr
+            for yr in years
+        }
+        for future in as_completed(futures):
+            try:
+                all_records.extend(future.result())
+            except Exception:
+                pass
+
+    return all_records
+
+
 def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
     """Fetch INPE snapshot data relevant to the parsed query.
 
     Returns a dict with keys used by format_data_context / detail formatters.
     Falls back gracefully on any fetch error.
+
+    Data sources:
+    - FOGO (BDQueimadas): fire hotspots, always fetched when fire is a metric.
+    - DETER: near-real-time deforestation alerts for Amazônia + Cerrado only.
+    - PRODES: annual deforestation for all 6 biomes; fetched when the query
+      targets non-DETER biomes (Pampa, Caatinga, Mata Atlântica, Pantanal)
+      or when DETER returns nothing for the requested scope.
     """
     from src.services.analysis.aggregator import aggregate_multi_source
-    from src.services.inpe_integration.deter_client import DETERAlert
-    from src.services.inpe_integration.fogo_client import FireHotspot
 
     try:
         from datetime import date, timedelta
-        from src.services.inpe_integration.fogo_client import fetch_current_hotspots
+        from src.services.inpe_integration.fogo_client import (
+            fetch_current_hotspots,
+            fetch_fire_risk,
+        )
         from src.services.inpe_integration.deter_client import (
             fetch_deter_for_biomes,
             fetch_deter_time_series,
@@ -145,15 +197,10 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
         period_days = _scope_to_days(pq.temporal_scope)
         start = today - timedelta(days=period_days)
 
-        from src.services.inpe_integration.fogo_client import fetch_fire_risk
-
-        # Always fetch the real 48h snapshot for current risk context.
+        # --- Fire hotspots ---
         hotspots_48h = fetch_current_hotspots(
             state=single_state, states=multi_states, count=5000
         )
-
-        # Fetch the period layer separately so the LLM gets counts that
-        # actually correspond to the time window the user asked about.
         if pq.temporal_scope and pq.temporal_scope != "last_1_day":
             hotspots_period = fetch_fire_risk(
                 state=single_state, states=multi_states, days=min(period_days, 90)
@@ -161,18 +208,45 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
         else:
             hotspots_period = hotspots_48h
 
+        # --- DETER alerts (Amazônia + Cerrado only) ---
+        deter_biomes = [b for b in pq.biomes if b in _DETER_COVERED_BIOMES]
         if pq.biomes:
-            alerts_raw = fetch_deter_for_biomes(
-                state=single_state,
-                biome_ids=pq.biomes,
-                start=start,
-                end=today,
-            )
+            if deter_biomes:
+                alerts_raw = fetch_deter_for_biomes(
+                    state=single_state,
+                    biome_ids=deter_biomes,
+                    start=start,
+                    end=today,
+                )
+            else:
+                # All requested biomes are non-DETER; skip DETER fetch entirely.
+                alerts_raw = []
         else:
             alerts_raw = fetch_deter_time_series(
                 state=single_state, start=start, end=today
             )
 
+        # --- PRODES annual data ---
+        # Fetch when: non-DETER biomes are explicitly requested, OR when
+        # deforestation is a metric and DETER returned nothing.
+        prodes_records: list = []
+        non_deter_biomes = [b for b in pq.biomes if b not in _DETER_COVERED_BIOMES]
+        need_prodes = (
+            "deforestation" in (pq.metrics or [])
+            and (bool(non_deter_biomes) or (not pq.biomes and not alerts_raw))
+        )
+        if need_prodes:
+            from src.config.constants import BIOMES as _ALL_BIOMES
+            prodes_biome_ids = non_deter_biomes if non_deter_biomes else [b["id"] for b in _ALL_BIOMES]
+            years_back = _scope_to_prodes_years(pq.temporal_scope)
+            prodes_records = _fetch_prodes_per_year(
+                biome_ids=prodes_biome_ids,
+                state=single_state,
+                start_year=today.year - years_back,
+                end_year=today.year - 1,  # PRODES publishes previous year
+            )
+
+        # --- Region label ---
         region_parts: list[str] = []
         if pq.biomes:
             from src.config.constants import BIOMES
@@ -210,9 +284,10 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
             "region_label": region_label,
             "period_label": period_label,
             "fetched_at": snapshot.fetched_at,
-            "hotspots": hotspots_period,   # use period data for state breakdown
+            "hotspots": hotspots_period,
             "hotspots_48h": hotspots_48h,
             "alerts": alerts_raw,
+            "prodes_records": prodes_records,
         }
 
     except Exception:
@@ -228,8 +303,30 @@ def _scope_to_days(scope: str | None) -> int:
         "last_90_days": 90,
         "last_year": 365,
         "last_12_months": 365,
+        "last_3_years": 365 * 3,
+        "last_5_years": 365 * 5,
+        "last_7_years": 365 * 7,
+        "last_10_years": 365 * 10,
     }
     return mapping.get(scope or "", 30)
+
+
+def _scope_to_prodes_years(scope: str | None) -> int:
+    """Map temporal scope to years of PRODES annual data to fetch."""
+    mapping = {
+        "last_1_day": 2,
+        "last_7_days": 2,
+        "last_14_days": 2,
+        "last_30_days": 2,
+        "last_90_days": 3,
+        "last_year": 3,
+        "last_12_months": 3,
+        "last_3_years": 3,
+        "last_5_years": 5,
+        "last_7_years": 7,
+        "last_10_years": 10,
+    }
+    return mapping.get(scope or "", 5)
 
 
 # ------------------------------------------------------------------ #
@@ -336,10 +433,13 @@ class ConversationService:
 
         hotspots = data.get("hotspots", [])
         alerts = data.get("alerts", [])
+        prodes_records = data.get("prodes_records", [])
         if "fire" in pq.metrics and hotspots:
             data_block += "\n\n" + format_fire_detail(hotspots)
         if "deforestation" in pq.metrics and alerts:
             data_block += "\n\n" + format_deforestation_detail(alerts)
+        if "deforestation" in pq.metrics and prodes_records:
+            data_block += "\n\n" + format_prodes_detail(prodes_records)
 
         # 4. Compose message list: system + history + data context + new user msg
         history = get_context(session_id)

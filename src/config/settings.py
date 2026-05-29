@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     )
 
     # LLM
-    openai_api_key: str = Field(default="", description="OpenAI API key")
+    openai_api_key: str = Field(default="", description="OpenAI API key", repr=False)
     openai_model: str = Field(default="gpt-4o", description="OpenAI model identifier")
 
     # INPE endpoints
@@ -32,7 +32,7 @@ class Settings(BaseSettings):
         default="https://terrabrasilis.dpi.inpe.br/geoserver/deter-cerrado/ows"
     )
     inpe_prodes_endpoint: str = Field(
-        default="https://terrabrasilis.dpi.inpe.br/geoserver/prodes-amz-nb/ows"
+        default="https://terrabrasilis.dpi.inpe.br/geoserver/prodes-amazon-nb/ows"
     )
     inpe_fogo_endpoint: str = Field(
         default="https://terrabrasilis.dpi.inpe.br/queimadas/geoserver/ows"
@@ -62,8 +62,8 @@ class Settings(BaseSettings):
     rate_limit_fogo: float = Field(default=5.0 / 60.0, description="5 req/min expressed as req/sec")
 
     # Langfuse
-    langfuse_public_key: str = Field(default="")
-    langfuse_secret_key: str = Field(default="")
+    langfuse_public_key: str = Field(default="", repr=False)
+    langfuse_secret_key: str = Field(default="", repr=False)
     langfuse_host: str = Field(default="https://cloud.langfuse.com")
 
     # App
