@@ -1,0 +1,19 @@
+[server]
+port = 8501
+address = "0.0.0.0"
+headless = true
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#1E7A4A"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#EEF5F1"
+textColor = "#1A1A2E"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"

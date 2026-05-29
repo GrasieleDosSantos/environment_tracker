@@ -1,0 +1,81 @@
+{
+  "metadata": {
+    "source": "IBGE / INPE",
+    "version": "1.0",
+    "description": "Brazilian geographic reference data for state codes, biome mappings, and regional groupings"
+  },
+  "states": {
+    "AC": { "name": "Acre", "name_en": "Acre", "region": "Norte", "biomes": ["amazonia"] },
+    "AL": { "name": "Alagoas", "name_en": "Alagoas", "region": "Nordeste", "biomes": ["caatinga", "mata_atlantica"] },
+    "AP": { "name": "Amapá", "name_en": "Amapá", "region": "Norte", "biomes": ["amazonia"] },
+    "AM": { "name": "Amazonas", "name_en": "Amazonas", "region": "Norte", "biomes": ["amazonia"] },
+    "BA": { "name": "Bahia", "name_en": "Bahia", "region": "Nordeste", "biomes": ["caatinga", "cerrado", "mata_atlantica"] },
+    "CE": { "name": "Ceará", "name_en": "Ceará", "region": "Nordeste", "biomes": ["caatinga"] },
+    "DF": { "name": "Distrito Federal", "name_en": "Federal District", "region": "Centro-Oeste", "biomes": ["cerrado"] },
+    "ES": { "name": "Espírito Santo", "name_en": "Espírito Santo", "region": "Sudeste", "biomes": ["mata_atlantica"] },
+    "GO": { "name": "Goiás", "name_en": "Goiás", "region": "Centro-Oeste", "biomes": ["cerrado", "amazonia"] },
+    "MA": { "name": "Maranhão", "name_en": "Maranhão", "region": "Nordeste", "biomes": ["amazonia", "cerrado", "caatinga"] },
+    "MT": { "name": "Mato Grosso", "name_en": "Mato Grosso", "region": "Centro-Oeste", "biomes": ["amazonia", "cerrado", "pantanal"] },
+    "MS": { "name": "Mato Grosso do Sul", "name_en": "Mato Grosso do Sul", "region": "Centro-Oeste", "biomes": ["cerrado", "pantanal"] },
+    "MG": { "name": "Minas Gerais", "name_en": "Minas Gerais", "region": "Sudeste", "biomes": ["cerrado", "mata_atlantica", "caatinga"] },
+    "PA": { "name": "Pará", "name_en": "Pará", "region": "Norte", "biomes": ["amazonia", "cerrado"] },
+    "PB": { "name": "Paraíba", "name_en": "Paraíba", "region": "Nordeste", "biomes": ["caatinga", "mata_atlantica"] },
+    "PR": { "name": "Paraná", "name_en": "Paraná", "region": "Sul", "biomes": ["mata_atlantica", "cerrado"] },
+    "PE": { "name": "Pernambuco", "name_en": "Pernambuco", "region": "Nordeste", "biomes": ["caatinga", "mata_atlantica"] },
+    "PI": { "name": "Piauí", "name_en": "Piauí", "region": "Nordeste", "biomes": ["caatinga", "cerrado"] },
+    "RJ": { "name": "Rio de Janeiro", "name_en": "Rio de Janeiro", "region": "Sudeste", "biomes": ["mata_atlantica"] },
+    "RN": { "name": "Rio Grande do Norte", "name_en": "Rio Grande do Norte", "region": "Nordeste", "biomes": ["caatinga", "mata_atlantica"] },
+    "RS": { "name": "Rio Grande do Sul", "name_en": "Rio Grande do Sul", "region": "Sul", "biomes": ["pampa", "mata_atlantica"] },
+    "RO": { "name": "Rondônia", "name_en": "Rondônia", "region": "Norte", "biomes": ["amazonia", "cerrado"] },
+    "RR": { "name": "Roraima", "name_en": "Roraima", "region": "Norte", "biomes": ["amazonia"] },
+    "SC": { "name": "Santa Catarina", "name_en": "Santa Catarina", "region": "Sul", "biomes": ["mata_atlantica"] },
+    "SP": { "name": "São Paulo", "name_en": "São Paulo", "region": "Sudeste", "biomes": ["mata_atlantica", "cerrado"] },
+    "SE": { "name": "Sergipe", "name_en": "Sergipe", "region": "Nordeste", "biomes": ["caatinga", "mata_atlantica"] },
+    "TO": { "name": "Tocantins", "name_en": "Tocantins", "region": "Norte", "biomes": ["cerrado", "amazonia"] }
+  },
+  "biomes": {
+    "amazonia": {
+      "name": "Amazônia",
+      "name_en": "Amazon",
+      "area_km2": 4196943,
+      "states": ["AC", "AP", "AM", "MA", "MT", "PA", "RO", "RR", "TO"]
+    },
+    "cerrado": {
+      "name": "Cerrado",
+      "name_en": "Cerrado",
+      "area_km2": 2036448,
+      "states": ["BA", "DF", "GO", "MA", "MT", "MS", "MG", "PA", "PI", "PR", "RO", "SP", "TO"]
+    },
+    "caatinga": {
+      "name": "Caatinga",
+      "name_en": "Caatinga",
+      "area_km2": 844453,
+      "states": ["AL", "BA", "CE", "MA", "MG", "PB", "PE", "PI", "RN", "SE"]
+    },
+    "mata_atlantica": {
+      "name": "Mata Atlântica",
+      "name_en": "Atlantic Forest",
+      "area_km2": 1110182,
+      "states": ["AL", "BA", "CE", "ES", "GO", "MG", "MS", "PB", "PR", "PE", "RJ", "RN", "RS", "SC", "SP", "SE"]
+    },
+    "pantanal": {
+      "name": "Pantanal",
+      "name_en": "Pantanal",
+      "area_km2": 150355,
+      "states": ["MT", "MS"]
+    },
+    "pampa": {
+      "name": "Pampa",
+      "name_en": "Pampas",
+      "area_km2": 176496,
+      "states": ["RS"]
+    }
+  },
+  "legal_amazon_states": ["AC", "AP", "AM", "MA", "MT", "PA", "RO", "RR", "TO"],
+  "brazil_bounding_box": {
+    "min_lat": -33.75,
+    "max_lat": 5.27,
+    "min_lon": -73.99,
+    "max_lon": -28.84
+  }
+}

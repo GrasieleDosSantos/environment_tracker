@@ -216,3 +216,31 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-specific: database files
+*.db
+*.sqlite3
+environment_tracker.db
+
+# Project-specific: geospatial data caches
+*.tif
+*.tiff
+*.geotiff
+*.nc
+data/cache/
+data/tmp/
+
+# Project-specific: Docker volumes (if mounted locally)
+pgdata/
+
+# Claude Code
+.claude/
+
+# JetBrains IDEs
+.idea/
+
+# GitHub Copilot / Speckit agent files
+.github/
+
+# Logs
+logs/
