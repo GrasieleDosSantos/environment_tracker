@@ -5,12 +5,15 @@ import uuid
 import streamlit as st
 
 from src.config.settings import get_settings
+from src.database.connection import get_engine
+from src.database.models import Base
 from src.ui.components.filters import FilterState, init_filter_state
 from src.ui.styles import inject_custom_css
 from src.utils.logging import configure_logging, set_session_id
 
 configure_logging()
 settings = get_settings()
+Base.metadata.create_all(get_engine())
 
 
 def _init_session_state() -> None:
