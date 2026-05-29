@@ -236,5 +236,11 @@ pgdata/
 # Claude Code
 .claude/
 
+# JetBrains IDEs
+.idea/
+
+# GitHub Copilot / Speckit agent files
+.github/
+
 # Logs
 logs/
