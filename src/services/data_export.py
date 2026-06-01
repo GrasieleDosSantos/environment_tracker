@@ -123,6 +123,72 @@ def export_pdf(
 
 
 # ------------------------------------------------------------------ #
+# Chart → PNG via matplotlib (no kaleido / no subprocess)               #
+# ------------------------------------------------------------------ #
+
+_LINE_COLORS = ["#1E7A4A", "#FF8C00", "#E63946", "#457B9D", "#6A4C93"]
+
+
+def _plotly_to_png_matplotlib(chart: Any) -> bytes:
+    """Convert a Plotly Figure to PNG bytes using matplotlib.
+
+    Extracts trace data directly from the figure object — no Chromium
+    subprocess, no kaleido. Safe for server environments with tight
+    WebSocket keepalive timeouts (e.g. Streamlit Cloud).
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+
+    fig_mpl, ax = plt.subplots(figsize=(10, 4.5))
+
+    for i, trace in enumerate(chart.data):
+        x_vals = list(trace.x) if trace.x is not None else []
+        y_vals = list(trace.y) if trace.y is not None else []
+        if not x_vals:
+            continue
+
+        color = _LINE_COLORS[i % len(_LINE_COLORS)]
+        dash = getattr(getattr(trace, "line", None), "dash", None)
+        linestyle = "--" if dash in ("dash",) else (":" if dash in ("dot",) else "-")
+        linewidth = 1.5 if dash else 2.0
+        ax.plot(x_vals, y_vals, label=trace.name or "",
+                color=color, linestyle=linestyle, linewidth=linewidth)
+
+    # Axis labels / title from layout
+    layout = chart.layout
+    title_text = getattr(getattr(layout, "title", None), "text", None) or ""
+    if title_text:
+        ax.set_title(title_text, fontsize=11, pad=8)
+
+    y_title = getattr(getattr(getattr(layout, "yaxis", None), "title", None), "text", None) or ""
+    if y_title:
+        ax.set_ylabel(y_title, fontsize=8)
+
+    # Format x-axis dates when the values are datetime-like
+    if x_vals and hasattr(x_vals[0], "year"):
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+        fig_mpl.autofmt_xdate(rotation=30, ha="right")
+
+    ax.grid(True, alpha=0.25, linewidth=0.5)
+    ax.set_facecolor("#F4F9F6")
+    handles, labels = ax.get_legend_handles_labels()
+    if any(labels):
+        ax.legend(handles, labels, loc="lower center",
+                  ncol=min(len(labels), 3), fontsize=7,
+                  bbox_to_anchor=(0.5, -0.28))
+
+    fig_mpl.tight_layout()
+    buf = io.BytesIO()
+    fig_mpl.savefig(buf, format="png", dpi=150, bbox_inches="tight",
+                    facecolor="white")
+    plt.close(fig_mpl)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+# ------------------------------------------------------------------ #
 # PDF — reportlab implementation                                        #
 # ------------------------------------------------------------------ #
 
@@ -167,10 +233,10 @@ def _pdf_reportlab(
     story.append(Paragraph(attr_text, muted_style))
     story.append(Spacer(1, 0.6*cm))
 
-    # Chart image (kaleido required for Plotly → PNG)
+    # Chart image — rendered via matplotlib (no subprocess, works on Streamlit Cloud)
     if chart is not None:
         try:
-            img_bytes = chart.to_image(format="png", width=700, height=380, scale=2)
+            img_bytes = _plotly_to_png_matplotlib(chart)
             story.append(Image(io.BytesIO(img_bytes), width=16*cm, height=8.7*cm))
             story.append(Spacer(1, 0.6*cm))
         except Exception:
