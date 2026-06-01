@@ -61,7 +61,7 @@ with st.sidebar:
     metric: Metric = st.radio(  # type: ignore[assignment]
         "Indicador / Indicator",
         options=["fire", "deforestation"],
-        format_func=lambda m: "🔥 Focos de Queimada" if m == "fire" else "🌳 Desmatamento DETER",
+        format_func=lambda m: "🔥 Focos de Queimada" if m == "fire" else "🌳 Desmatamento (DETER / PRODES)",
         key="trends_metric",
     )
 
@@ -328,8 +328,12 @@ with st.spinner("Carregando dados INPE… / Loading INPE data…"):
                     )
 
         value_col = "area_km2"
-        y_label = "Área desmatada km² / Deforested area km²"
-        source_label = "PRODES — INPE" if is_prodes_data else "DETER — INPE"
+        y_label = (
+            "Área desmatada confirmada (km²) / Confirmed deforestation area (km²)"
+            if is_prodes_data
+            else "Área de alertas DETER (km²) / DETER alert area (km²)"
+        )
+        source_label = "PRODES — INPE (desmatamento anual confirmado)" if is_prodes_data else "DETER — INPE (alertas em tempo quase real)"
 
 # ------------------------------------------------------------------ #
 # Region label                                                          #
@@ -351,9 +355,13 @@ if not monthly_df.empty and len(monthly_df) >= 2:
     trend_info = calculate_trend(monthly_df, date_col="month", value_col=value_col)
 
 # Label adjustments for annual (PRODES) vs monthly (DETER/Fire) data
-_period_label = "Anual / Annual" if is_prodes_data else "Mensal / Monthly"
-_count_label  = "Anos / Years"   if is_prodes_data else "Meses / Months"
-_mean_label   = "Média anual / Annual mean" if is_prodes_data else "Média mensal / Monthly mean"
+_period_label = "Anual PRODES / Annual PRODES" if is_prodes_data else "Alertas mensais DETER / Monthly DETER alerts"
+_count_label  = "Anos / Years"               if is_prodes_data else "Meses / Months"
+_mean_label   = (
+    "Média anual confirmada (km²) / Annual confirmed mean (km²)"
+    if is_prodes_data
+    else "Média mensal de alertas (km²) / Monthly alert mean (km²)"
+)
 _xfmt         = "%Y"             if is_prodes_data else "%b %Y"
 
 # ------------------------------------------------------------------ #
@@ -400,9 +408,9 @@ else:
             help="Média de valores no período selecionado. / Average of values over the selected period.",
         )
         k2.metric(
-            "Total no período / Period total",
+            "Total no período (km²) / Period total (km²)",
             f"{monthly_df[value_col].sum():,.0f}",
-            help="Soma de todos os registros no período. / Sum of all records in the period.",
+            help="Soma das áreas no período. Para DETER: soma das áreas de alerta. Para PRODES: soma das áreas anuais confirmadas. / Sum of areas in the period. For DETER: sum of alert areas. For PRODES: sum of confirmed annual areas.",
         )
         k3.metric(_count_label, f"{trend_info.n_points}")
         k4.metric(
@@ -416,9 +424,12 @@ else:
         st.divider()
 
     # Build figure manually for full control over overlays
-    chart_title = (
-        f"{'Focos de Queimada' if metric == 'fire' else 'Área Desmatada DETER'} — {region_label}"
-    )
+    if metric == "fire":
+        chart_title = f"Focos de Queimada — {region_label}"
+    elif is_prodes_data:
+        chart_title = f"Desmatamento Anual Confirmado PRODES (km²) — {region_label}"
+    else:
+        chart_title = f"Alertas de Desmatamento DETER (km²) — {region_label}"
     fig = go.Figure()
 
     # Raw series
