@@ -47,7 +47,7 @@ dependencies = [
     "structlog>=24.1.0",
     # PDF export
     "reportlab>=4.0.0",
-    "kaleido>=0.2.1",
+    "matplotlib>=3.9.0",
 ]
 
 [project.optional-dependencies]
