@@ -117,6 +117,7 @@ class BaseINPEClient(ABC):
     async def _wfs_hits_count(
         self,
         cql_filter: str | None = None,
+        type_name: str | None = None,
     ) -> int:
         """Return the total feature count matching *cql_filter*.
 
@@ -150,7 +151,7 @@ class BaseINPEClient(ABC):
             "service": "WFS",
             "version": "2.0.0",
             "request": "GetFeature",
-            "typeName": self.layer_name,
+            "typeName": type_name or self.layer_name,
             "outputFormat": "application/json",
             "count": "1",   # fetch only 1 record; numberMatched reports the total
         }
@@ -164,9 +165,9 @@ class BaseINPEClient(ABC):
             filter=cql_filter,
         )
 
-        # Historical biome queries can take 30–60 s on the INPE WFS; use a longer
-        # per-request timeout so slow-but-valid responses aren't dropped.
-        _count_timeout = httpx.Timeout(120.0, connect=10.0)
+        # Allow up to 45 s per count query — enough for slow INPE responses
+        # while staying well under Streamlit Cloud's 60 s WebSocket keepalive.
+        _count_timeout = httpx.Timeout(45.0, connect=10.0)
 
         try:
             resp = await self._client.get(
