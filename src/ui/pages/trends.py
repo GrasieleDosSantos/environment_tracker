@@ -354,15 +354,26 @@ trend_info: TrendInfo | None = None
 if not monthly_df.empty and len(monthly_df) >= 2:
     trend_info = calculate_trend(monthly_df, date_col="month", value_col=value_col)
 
-# Label adjustments for annual (PRODES) vs monthly (DETER/Fire) data
-_period_label = "Anual PRODES / Annual PRODES" if is_prodes_data else "Alertas mensais DETER / Monthly DETER alerts"
-_count_label  = "Anos / Years"               if is_prodes_data else "Meses / Months"
-_mean_label   = (
-    "Média anual confirmada (km²) / Annual confirmed mean (km²)"
-    if is_prodes_data
-    else "Média mensal de alertas (km²) / Monthly alert mean (km²)"
-)
-_xfmt         = "%Y"             if is_prodes_data else "%b %Y"
+# Label adjustments per metric and data source
+if metric == "fire":
+    _period_label = "Mensal / Monthly"
+    _count_label  = "Meses / Months"
+    _mean_label   = "Média mensal de focos / Monthly hotspot mean"
+    _total_label  = "Total de focos / Total hotspots"
+    _total_help   = "Soma de focos de calor detectados no período. / Total fire hotspots detected in the period."
+elif is_prodes_data:
+    _period_label = "Anual PRODES / Annual PRODES"
+    _count_label  = "Anos / Years"
+    _mean_label   = "Média anual confirmada (km²) / Annual confirmed mean (km²)"
+    _total_label  = "Total confirmado (km²) / Confirmed total (km²)"
+    _total_help   = "Soma das áreas anuais de desmatamento confirmado PRODES. / Sum of PRODES confirmed annual deforestation areas."
+else:
+    _period_label = "Alertas mensais DETER / Monthly DETER alerts"
+    _count_label  = "Meses / Months"
+    _mean_label   = "Média mensal de alertas (km²) / Monthly alert mean (km²)"
+    _total_label  = "Total de alertas (km²) / Alert total (km²)"
+    _total_help   = "Soma das áreas de alertas DETER no período. DETER detecta eventos em tempo quase real, não desmatamento confirmado. / Sum of DETER alert areas. DETER detects events in near-real-time, not confirmed deforestation."
+_xfmt = "%Y" if is_prodes_data else "%b %Y"
 
 # ------------------------------------------------------------------ #
 # Direction indicator                                                   #
@@ -408,9 +419,9 @@ else:
             help="Média de valores no período selecionado. / Average of values over the selected period.",
         )
         k2.metric(
-            "Total no período (km²) / Period total (km²)",
+            _total_label,
             f"{monthly_df[value_col].sum():,.0f}",
-            help="Soma das áreas no período. Para DETER: soma das áreas de alerta. Para PRODES: soma das áreas anuais confirmadas. / Sum of areas in the period. For DETER: sum of alert areas. For PRODES: sum of confirmed annual areas.",
+            help=_total_help,
         )
         k3.metric(_count_label, f"{trend_info.n_points}")
         k4.metric(
