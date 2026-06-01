@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Environmental Status Tracker for Brazil — conversational interface to INPE data (DETER, PRODES, FOGO)"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "GPL-3.0-or-later" }
 
 dependencies = [
     # UI Framework
