@@ -10,7 +10,8 @@ Update freq:  every 3-6 hours
 Cache TTL:    4 hours (48h / current queries); 24h for historical days
 """
 
-from datetime import date, datetime
+import asyncio
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel, model_validator
@@ -292,21 +293,18 @@ class FOGOClient(BaseINPEClient):
         so the trend series has no gaps.
         """
         current_year = date.today().year
-        rows: list[dict] = []
-
         geo_pred = self._estado_filter(state, states) or ""
         biome_pred = f"bioma = '{biome}'" if biome else ""
 
-        # Iterate month by month
+        def _next_month(d: date) -> date:
+            return date(d.year + (d.month // 12), (d.month % 12) + 1, 1)
+
+        # Build the full list of months in range
+        month_specs: list[tuple[date, date, date, str, str, str]] = []
         cur = date(start.year, start.month, 1)
         while cur <= end:
-            month_end_day = (
-                date(cur.year + (cur.month // 12), (cur.month % 12) + 1, 1)
-                - __import__("datetime").timedelta(days=1)
-            )
             range_start = max(start, cur)
-            range_end = min(end, month_end_day)
-
+            range_end = min(end, _next_month(cur) - timedelta(days=1))
             cache_key_data: dict[str, Any] = {
                 "start": range_start.isoformat(),
                 "end": range_end.isoformat(),
@@ -316,22 +314,11 @@ class FOGOClient(BaseINPEClient):
                 "_method": "monthly_count",
             }
             cache_key = self.build_cache_key(cache_key_data)
-            cached = self._cache.get(cache_key)
-            # Only trust a cached entry that was written by a successful request
-            # (marked with "ok": True).  Entries written by failed hits requests
-            # lack this flag and will be overwritten with a fresh fetch.
-            if cached and cached.get("ok") is True:
-                rows.append({"month": cur, "count": cached["count"]})
-                cur = date(cur.year + (cur.month // 12), (cur.month % 12) + 1, 1)
-                continue
-
-            original_layer = self.layer_name
-            self.layer_name = (
+            layer = (
                 "dados_abertos:focos_ano_atual_br_todosats"
                 if cur.year == current_year
                 else self._year_layer(cur.year)
             )
-
             filters = [
                 f"data_pas >= '{range_start.isoformat()}'",
                 f"data_pas <= '{range_end.isoformat()}'",
@@ -340,27 +327,42 @@ class FOGOClient(BaseINPEClient):
                 filters.append(geo_pred)
             if biome_pred:
                 filters.append(biome_pred)
+            month_specs.append((cur, range_start, range_end, cache_key, layer, " AND ".join(filters)))
+            cur = _next_month(cur)
 
+        # Serve cached months immediately; collect uncached months for parallel fetch
+        rows: list[dict] = []
+        uncached: list[tuple] = []
+
+        for spec in month_specs:
+            cur, range_start, range_end, cache_key, layer, cql = spec
+            cached = self._cache.get(cache_key)
+            if cached and cached.get("ok") is True:
+                rows.append({"month": cur, "count": cached["count"]})
+            else:
+                uncached.append(spec)
+
+        # Fetch all uncached months concurrently — type_name avoids mutating
+        # self.layer_name from multiple coroutines simultaneously.
+        async def _fetch_one(
+            cur: date, range_start: date, range_end: date,
+            cache_key: str, layer: str, cql: str,
+        ) -> dict:
             try:
-                n = await self._wfs_hits_count(cql_filter=" AND ".join(filters))
+                n = await self._wfs_hits_count(cql_filter=cql, type_name=layer)
             except Exception:
                 n = -1
-            finally:
-                self.layer_name = original_layer
-
             if n >= 0:
-                # Cache successful results; mark with "ok" so stale error entries
-                # are not reused next request.
                 ttl = 86400 if range_end < date.today() else self.default_cache_ttl
                 self._cache.set(cache_key, self.source_name, {"count": n, "ok": True}, ttl)
-                rows.append({"month": cur, "count": n})
-            else:
-                # Request failed — do not cache; append 0 so the series has no gap
-                rows.append({"month": cur, "count": 0})
+                return {"month": cur, "count": n}
+            return {"month": cur, "count": 0}
 
-            # Advance to next month
-            cur = date(cur.year + (cur.month // 12), (cur.month % 12) + 1, 1)
+        if uncached:
+            fetched = await asyncio.gather(*[_fetch_one(*s) for s in uncached])
+            rows.extend(fetched)
 
+        rows.sort(key=lambda r: r["month"])
         return rows
 
     async def fetch_fire_time_series(

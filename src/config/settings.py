@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     # Rate limits (requests per second)
     rate_limit_deter: float = Field(default=1.0)
     rate_limit_prodes: float = Field(default=2.0)
-    rate_limit_fogo: float = Field(default=5.0 / 60.0, description="5 req/min expressed as req/sec")
+    rate_limit_fogo: float = Field(default=1.0, description="1 req/sec for fogo count queries")
 
     # Langfuse
     langfuse_public_key: str = Field(default="", repr=False)
