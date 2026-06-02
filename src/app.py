@@ -4,6 +4,8 @@ import uuid
 
 import streamlit as st
 
+from sqlalchemy.exc import OperationalError as _SAOperationalError
+
 from src.config.settings import get_settings
 from src.database.connection import get_engine
 from src.database.models import Base
@@ -13,7 +15,14 @@ from src.utils.logging import configure_logging, set_session_id
 
 configure_logging()
 settings = get_settings()
-Base.metadata.create_all(get_engine())
+
+# Create tables on first boot. checkfirst=True skips tables that already exist,
+# but two Streamlit workers can race past the check simultaneously — catch that.
+try:
+    Base.metadata.create_all(get_engine(), checkfirst=True)
+except _SAOperationalError as _e:
+    if "already exists" not in str(_e):
+        raise
 
 
 def _init_session_state() -> None:
