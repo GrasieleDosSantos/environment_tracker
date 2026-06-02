@@ -93,7 +93,9 @@ class BaseINPEClient(ABC):
         self._log = get_logger(self.__class__.__module__)
 
     async def __aenter__(self) -> "BaseINPEClient":
-        self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0))
+        # 55 s read timeout leaves a 5 s margin under Streamlit Cloud's
+        # 60 s WebSocket keepalive window.
+        self._client = httpx.AsyncClient(timeout=httpx.Timeout(55.0, connect=10.0))
         return self
 
     async def __aexit__(self, *_: Any) -> None:

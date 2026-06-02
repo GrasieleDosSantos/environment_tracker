@@ -231,8 +231,8 @@ st.subheader(
 k1, k2, k3, k4 = st.columns(4)
 
 k1.metric(
-    label="🌳 Desmatamento / Deforestation",
-    value=f"{snapshot.deforestation_km2:,.1f} km²",
+    label="🌳 Desmatamento DETER / Deforestation",
+    value=f"{snapshot.deforestation_km2:,.1f} km²" if deter_alerts else "N/A",
     help="Área total de alertas DETER no período / Total DETER alert area in period",
 )
 k2.metric(
@@ -242,7 +242,7 @@ k2.metric(
 )
 k3.metric(
     label="📍 Alertas DETER",
-    value=f"{snapshot.deforestation_count:,}",
+    value=f"{snapshot.deforestation_count:,}" if deter_alerts else "N/A",
     help="Número de polígonos de alerta DETER / Number of DETER alert polygons",
 )
 
