@@ -140,18 +140,53 @@ if user_input := st.chat_input(placeholder):
     # Ensure a DB session exists
     session_id = _ensure_session()
 
-    # Stream assistant response with spinner
+    # Run svc.chat() in a background thread and send periodic UI updates
+    # to keep the WebSocket alive during long INPE fetches + LLM calls.
     with st.chat_message("assistant"):
-        with st.spinner("Consultando dados do INPE... / Fetching INPE data..."):
-            try:
-                svc = _get_service()
-                reply = svc.chat(
-                    user_input,
-                    session_id=session_id,
-                    langfuse_session_id=st.session_state.conv_langfuse_id,
-                )
+        try:
+            import threading
 
-                st.markdown(reply.text)
+            _STEPS = [
+                "⏳ Analisando sua pergunta… / Analyzing your question…",
+                "🌐 Buscando dados INPE… / Fetching INPE data…",
+                "🤖 Consultando o assistente… / Consulting the assistant…",
+                "📝 Preparando resposta… / Preparing response…",
+            ]
+            _result: dict = {}
+            _done = threading.Event()
+
+            def _run() -> None:
+                try:
+                    svc = _get_service()
+                    _result["reply"] = svc.chat(
+                        user_input,
+                        session_id=session_id,
+                        langfuse_session_id=st.session_state.conv_langfuse_id,
+                    )
+                except Exception as exc:
+                    _result["error"] = exc
+                finally:
+                    _done.set()
+
+            threading.Thread(target=_run, daemon=True).start()
+
+            # Write a status update every 2 s — each write resets the
+            # load-balancer's WebSocket idle timeout.
+            _status = st.empty()
+            _step = 0
+            _ticks = 0
+            while not _done.wait(timeout=2):
+                _status.caption(_STEPS[min(_step, len(_STEPS) - 1)])
+                _ticks += 1
+                if _ticks % 5 == 0 and _step < len(_STEPS) - 1:
+                    _step += 1
+            _status.empty()
+
+            if "error" in _result:
+                raise _result["error"]
+
+            reply = _result["reply"]
+            st.markdown(reply.text)
 
                 # Update geographic context chip
                 if reply.parsed_query:
