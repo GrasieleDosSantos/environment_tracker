@@ -151,6 +151,9 @@ if user_input := st.chat_input(placeholder):
             "🤖 Consultando o assistente… / Consulting the assistant…",
             "📝 Preparando resposta… / Preparing response…",
         ]
+        # Capture session_state values now — background threads cannot
+        # access st.session_state.
+        _langfuse_id = st.session_state.conv_langfuse_id
         _result: dict = {}
         _done = threading.Event()
 
@@ -160,7 +163,7 @@ if user_input := st.chat_input(placeholder):
                 _result["reply"] = svc.chat(
                     user_input,
                     session_id=session_id,
-                    langfuse_session_id=st.session_state.conv_langfuse_id,
+                    langfuse_session_id=_langfuse_id,
                 )
             except Exception as exc:
                 _result["error"] = exc
