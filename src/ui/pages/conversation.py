@@ -143,85 +143,82 @@ if user_input := st.chat_input(placeholder):
     # Run svc.chat() in a background thread and send periodic UI updates
     # to keep the WebSocket alive during long INPE fetches + LLM calls.
     with st.chat_message("assistant"):
-        try:
-            import threading
+        import threading
 
-            _STEPS = [
-                "⏳ Analisando sua pergunta… / Analyzing your question…",
-                "🌐 Buscando dados INPE… / Fetching INPE data…",
-                "🤖 Consultando o assistente… / Consulting the assistant…",
-                "📝 Preparando resposta… / Preparing response…",
-            ]
-            _result: dict = {}
-            _done = threading.Event()
+        _STEPS = [
+            "⏳ Analisando sua pergunta… / Analyzing your question…",
+            "🌐 Buscando dados INPE… / Fetching INPE data…",
+            "🤖 Consultando o assistente… / Consulting the assistant…",
+            "📝 Preparando resposta… / Preparing response…",
+        ]
+        _result: dict = {}
+        _done = threading.Event()
 
-            def _run() -> None:
-                try:
-                    svc = _get_service()
-                    _result["reply"] = svc.chat(
-                        user_input,
-                        session_id=session_id,
-                        langfuse_session_id=st.session_state.conv_langfuse_id,
-                    )
-                except Exception as exc:
-                    _result["error"] = exc
-                finally:
-                    _done.set()
+        def _run() -> None:
+            try:
+                svc = _get_service()
+                _result["reply"] = svc.chat(
+                    user_input,
+                    session_id=session_id,
+                    langfuse_session_id=st.session_state.conv_langfuse_id,
+                )
+            except Exception as exc:
+                _result["error"] = exc
+            finally:
+                _done.set()
 
-            threading.Thread(target=_run, daemon=True).start()
+        threading.Thread(target=_run, daemon=True).start()
 
-            # Write a status update every 2 s — each write resets the
-            # load-balancer's WebSocket idle timeout.
-            _status = st.empty()
-            _step = 0
-            _ticks = 0
-            while not _done.wait(timeout=2):
-                _status.caption(_STEPS[min(_step, len(_STEPS) - 1)])
-                _ticks += 1
-                if _ticks % 5 == 0 and _step < len(_STEPS) - 1:
-                    _step += 1
-            _status.empty()
+        # Write a status caption every 2 s — each write resets the
+        # load-balancer's WebSocket idle timeout.
+        _status = st.empty()
+        _step = 0
+        _ticks = 0
+        while not _done.wait(timeout=2):
+            _status.caption(_STEPS[min(_step, len(_STEPS) - 1)])
+            _ticks += 1
+            if _ticks % 5 == 0 and _step < len(_STEPS) - 1:
+                _step += 1
+        _status.empty()
 
-            if "error" in _result:
-                raise _result["error"]
-
+        if "error" in _result:
+            exc = _result["error"]
+            error_msg = (
+                f"❌ Erro ao processar sua pergunta / Error processing your question:\n\n"
+                f"`{exc}`\n\n"
+                "Tente novamente ou reformule sua pergunta. / Please try again or rephrase."
+            )
+            st.error(error_msg)
+            st.session_state.conv_messages.append(
+                {"role": "assistant", "content": error_msg}
+            )
+        else:
             reply = _result["reply"]
             st.markdown(reply.text)
 
-                # Update geographic context chip
-                if reply.parsed_query:
-                    pq = reply.parsed_query
-                    if pq.states or pq.biomes:
-                        st.session_state.conv_context = {
-                            "states": pq.states,
-                            "biomes": pq.biomes,
-                            "language": pq.language,
-                        }
+            # Update geographic context chip
+            if reply.parsed_query:
+                pq = reply.parsed_query
+                if pq.states or pq.biomes:
+                    st.session_state.conv_context = {
+                        "states": pq.states,
+                        "biomes": pq.biomes,
+                        "language": pq.language,
+                    }
 
-                # Show clarification options as buttons if needed
-                if reply.needs_clarification and reply.clarification_options:
-                    st.markdown("**Escolha uma opção / Choose an option:**")
-                    for opt in reply.clarification_options:
-                        if st.button(opt, key=f"clarify_{opt[:20]}"):
-                            st.session_state.conv_messages.append(
-                                {"role": "user", "content": opt}
-                            )
-                            st.rerun()
+            # Show clarification options as buttons if needed
+            if reply.needs_clarification and reply.clarification_options:
+                st.markdown("**Escolha uma opção / Choose an option:**")
+                for opt in reply.clarification_options:
+                    if st.button(opt, key=f"clarify_{opt[:20]}"):
+                        st.session_state.conv_messages.append(
+                            {"role": "user", "content": opt}
+                        )
+                        st.rerun()
 
-                st.session_state.conv_messages.append(
-                    {"role": "assistant", "content": reply.text}
-                )
-
-            except Exception as exc:
-                error_msg = (
-                    f"❌ Erro ao processar sua pergunta / Error processing your question:\n\n"
-                    f"`{exc}`\n\n"
-                    "Tente novamente ou reformule sua pergunta. / Please try again or rephrase."
-                )
-                st.error(error_msg)
-                st.session_state.conv_messages.append(
-                    {"role": "assistant", "content": error_msg}
-                )
+            st.session_state.conv_messages.append(
+                {"role": "assistant", "content": reply.text}
+            )
 
     st.rerun()
 
