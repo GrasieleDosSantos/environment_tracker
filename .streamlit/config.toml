@@ -3,6 +3,9 @@ port = 8501
 address = "0.0.0.0"
 headless = true
 enableXsrfProtection = true
+# Streamlit Cloud's reverse proxy can mishandle compressed WebSocket
+# frames, which triggers spurious keepalive ping timeouts.
+enableWebsocketCompression = false
 
 [browser]
 gatherUsageStats = false
