@@ -279,15 +279,28 @@ with st.spinner("Carregando dados INPE… / Loading INPE data…"):
                 (single_biome_id,), single_state, start_year, end_year
             )
             prodes_records = _reconstruct_prodes(raw_prodes)
+
+            # PRODES is annual: if fewer than 3 distinct years are available in the
+            # selected window, extend back automatically so the trend line is meaningful.
+            effective_start_year = start_year
+            if len({r.year for r in prodes_records if r.year}) < 3:
+                effective_start_year = _today.year - 5
+                raw_prodes = _load_prodes_annual(
+                    (single_biome_id,), single_state, effective_start_year, end_year
+                )
+                prodes_records = _reconstruct_prodes(raw_prodes)
+
             annual_df = prodes_annual_series(prodes_records)
             # Rename so downstream trend/chart code uses "month" column uniformly
             monthly_df = annual_df.rename(columns={"year_date": "month"})
+            extended = effective_start_year < start_year
             data_note = (
+                f"{'⚠️ Período estendido automaticamente para mostrar dados suficientes. / Period automatically extended to show enough data points. ' if extended else ''}"
                 f"Dados PRODES anuais para **{biome_display}** "
-                f"({start_year}–{end_year}). "
+                f"({effective_start_year}–{end_year}). "
                 f"PRODES publica dados anuais (~novembro). "
                 f"Para monitoramento em tempo real, use os biomas Amazônia ou Cerrado (DETER).\n\n"
-                f"Annual PRODES data for **{biome_display}** ({start_year}–{end_year}). "
+                f"Annual PRODES data for **{biome_display}** ({effective_start_year}–{end_year}). "
                 f"PRODES publishes yearly data (~November). "
                 f"For near-real-time monitoring, select Amazônia or Cerrado (DETER)."
             )
