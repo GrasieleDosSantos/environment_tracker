@@ -350,32 +350,46 @@ async def _fetch_prodes_multi_biome_async(
 ) -> list[PRODESData]:
     """Fetch PRODES annual data across any combination of biomes, normalised to PRODESData.
 
-    All six biomes (including Amazônia) now use PRODESNonAmazonClient since they
-    share the same WFS schema (area_km, state, year, image_date).
+    Uses one WFS request per biome per year so the count cap never skips a year.
+    Dense biomes like Cerrado have 60k+ records/year — a multi-year query with
+    count=5000 would return only the oldest records and miss recent years entirely.
+    A semaphore caps concurrent requests to 4 to avoid overloading the INPE server.
     """
-    results: list[PRODESData] = []
+    import asyncio as _asyncio
 
-    for biome_id in biome_ids:
+    if not start_year or not end_year:
+        return []
+
+    _sem = _asyncio.Semaphore(4)
+
+    async def _fetch_one(biome_id: str, year: int) -> list[PRODESData]:
         layer = _PRODES_BIOME_LAYERS.get(biome_id)
         endpoint = _PRODES_BIOME_ENDPOINTS.get(biome_id)
         if not layer or not endpoint:
-            continue
-
-        async with PRODESNonAmazonClient(endpoint=endpoint, layer=layer) as client:
-            raw_data = await client.fetch_by_period(
-                start_year=start_year, end_year=end_year, state=state, count=count
-            )
-
+            return []
         display = _BIOME_DISPLAY.get(biome_id, biome_id)
-        for r in raw_data:
-            results.append(PRODESData(
-                year=r.year,
-                state=r.state,
-                biome=display,
-                area_km2=r.area_km2,
-                municipality=None,
-            ))
+        async with _sem:
+            async with PRODESNonAmazonClient(endpoint=endpoint, layer=layer) as client:
+                raw_data = await client.fetch_by_period(
+                    start_year=year, end_year=year, state=state, count=count
+                )
+        return [
+            PRODESData(year=r.year, state=r.state, biome=display,
+                       area_km2=r.area_km2, municipality=None)
+            for r in raw_data
+        ]
 
+    tasks = [
+        _fetch_one(biome_id, yr)
+        for biome_id in biome_ids
+        for yr in range(start_year, end_year + 1)
+    ]
+    batches = await _asyncio.gather(*tasks, return_exceptions=True)
+
+    results: list[PRODESData] = []
+    for batch in batches:
+        if not isinstance(batch, Exception):
+            results.extend(batch)
     return results
 
 
