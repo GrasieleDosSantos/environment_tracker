@@ -146,34 +146,62 @@ single_state = _single(fs.states)
 # Data loading                                                          #
 # ------------------------------------------------------------------ #
 
+import threading as _threading
+from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed as _as_completed
+
 deter_error: str | None = None
 fogo_error: str | None = None
 
-with st.spinner("Carregando dados DETER... / Loading DETER data..."):
-    biome_ids_str = ",".join(sorted(fs.biomes)) if fs.biomes else None
-    try:
-        deter_raw = _load_deter(
-            single_state, biome_ids_str,
-            period_start.isoformat(), period_end.isoformat(),
-        )
-        if len(fs.states) > 1:
-            deter_raw = _filter_dicts(deter_raw, "state", fs.states)
-    except Exception as exc:
-        deter_raw = []
-        deter_error = str(exc)
+biome_ids_str = ",".join(sorted(fs.biomes)) if fs.biomes else None
+fogo_states_str = ",".join(sorted(fs.states)) if fs.states else None
+_start_iso = period_start.isoformat()
+_end_iso = period_end.isoformat()
 
-with st.spinner("Carregando dados FOGO... / Loading FOGO data..."):
-    fogo_states_str = ",".join(sorted(fs.states)) if fs.states else None
-    try:
-        fogo_raw_48h = _load_fogo_48h(fogo_states_str, None)
-        fogo_raw_period = _load_fogo_period(fogo_states_str, None, period_days)
-        if fs.biomes:
-            fogo_raw_48h = _filter_biomes(fogo_raw_48h, fs.biomes)
-            fogo_raw_period = _filter_biomes(fogo_raw_period, fs.biomes)
-    except Exception as exc:
-        fogo_raw_48h = []
-        fogo_raw_period = []
-        fogo_error = str(exc)
+# Run all three loaders in parallel threads and keep the WebSocket alive
+# with status updates every 2 s (avoids Streamlit Cloud proxy timeout).
+_load_results: dict = {}
+_load_done = _threading.Event()
+
+def _load_all() -> None:
+    with _TPE(max_workers=3) as pool:
+        futures = {
+            pool.submit(_load_deter, single_state, biome_ids_str, _start_iso, _end_iso): "deter",
+            pool.submit(_load_fogo_48h, fogo_states_str, None): "fogo_48h",
+            pool.submit(_load_fogo_period, fogo_states_str, None, period_days): "fogo_period",
+        }
+        for f in _as_completed(futures):
+            key = futures[f]
+            try:
+                _load_results[key] = f.result()
+            except Exception as exc:
+                _load_results[key] = []
+                _load_results[f"error_{key}"] = str(exc)
+    _load_done.set()
+
+_threading.Thread(target=_load_all, daemon=True).start()
+
+_load_status = st.empty()
+_load_ticks = 0
+while not _load_done.wait(timeout=2):
+    _load_status.caption(
+        "⏳ Carregando dados INPE… / Loading INPE data…"
+        if _load_ticks < 5 else
+        "🌐 Aguardando resposta do TerraBrasilis… / Waiting for TerraBrasilis…"
+    )
+    _load_ticks += 1
+_load_status.empty()
+
+deter_raw = _load_results.get("deter", [])
+fogo_raw_48h = _load_results.get("fogo_48h", [])
+fogo_raw_period = _load_results.get("fogo_period", [])
+deter_error = _load_results.get("error_deter")
+fogo_error = _load_results.get("error_fogo_48h") or _load_results.get("error_fogo_period")
+
+if len(fs.states) > 1:
+    deter_raw = _filter_dicts(deter_raw, "state", fs.states)
+if fs.biomes:
+    fogo_raw_48h = _filter_biomes(fogo_raw_48h, fs.biomes)
+    fogo_raw_period = _filter_biomes(fogo_raw_period, fs.biomes)
 
 # ------------------------------------------------------------------ #
 # Aggregate                                                             #
