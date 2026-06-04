@@ -172,6 +172,7 @@ class DETERClient(BaseINPEClient):
             "end": end,
             "count": count,
             "_method": "time_series",
+            "_layer": self.layer_name,  # Amazon and Cerrado share identical params otherwise
         }
         cache_key = self.build_cache_key(params)
         if cached := self._cache.get(cache_key):
