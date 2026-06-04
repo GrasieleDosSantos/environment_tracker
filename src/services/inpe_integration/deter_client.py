@@ -21,7 +21,7 @@ from src.utils.decorators import async_safe
 # All other biomes fall back to PRODES annual data only.
 _DETER_BIOME_LAYERS: dict[str, str] = {
     "amazonia": "deter-amz:deter_amz",
-    "cerrado":  "deter-cerrado:deter_cerrado",
+    "cerrado":  "deter-cerrado-nb:deter_cerrado",  # -nb workspace has current data
 }
 
 # Canonical display names keyed by biome ID (used to inject biome field into records)
