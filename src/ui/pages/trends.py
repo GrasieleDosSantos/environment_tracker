@@ -180,14 +180,11 @@ def _load_deter(
     start = date.fromisoformat(start_iso)
     end = date.fromisoformat(end_iso)
     try:
-        if biome_id:
-            from src.services.inpe_integration.deter_client import fetch_deter_for_biomes
-            alerts = fetch_deter_for_biomes(
-                biome_ids=[biome_id], state=state, start=start, end=end
-            )
-        else:
-            from src.services.inpe_integration.deter_client import fetch_deter_time_series
-            alerts = fetch_deter_time_series(state=state, biome=None, start=start, end=end)
+        from src.services.inpe_integration.deter_client import fetch_deter_for_biomes
+        biome_ids_to_fetch = [biome_id] if biome_id else ["amazonia", "cerrado"]
+        alerts = fetch_deter_for_biomes(
+            biome_ids=biome_ids_to_fetch, state=state, start=start, end=end
+        )
         return [a.model_dump() for a in alerts]
     except Exception:
         return []

@@ -46,20 +46,13 @@ def _load_deter(
     end_iso: str,
 ) -> list[dict]:
     from datetime import date
-    from src.services.inpe_integration.deter_client import (
-        fetch_deter_for_biomes,
-        fetch_deter_time_series,
-    )
+    from src.services.inpe_integration.deter_client import fetch_deter_for_biomes
 
     start = date.fromisoformat(start_iso)
     end = date.fromisoformat(end_iso)
 
-    if biome_ids_str:
-        biome_ids = biome_ids_str.split(",")
-        alerts = fetch_deter_for_biomes(state=state, biome_ids=biome_ids, start=start, end=end)
-    else:
-        # No biome filter — default to Amazon only (largest / most active dataset)
-        alerts = fetch_deter_time_series(state=state, start=start, end=end)
+    biome_ids = biome_ids_str.split(",") if biome_ids_str else ["amazonia", "cerrado"]
+    alerts = fetch_deter_for_biomes(state=state, biome_ids=biome_ids, start=start, end=end)
     return [a.model_dump(mode="json") for a in alerts]
 
 
