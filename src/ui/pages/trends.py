@@ -245,105 +245,114 @@ end_iso = period_end.isoformat()
 _DETER_COVERED_BIOMES: frozenset[str] = frozenset({"amazonia", "cerrado"})
 _ALL_PRODES_BIOMES: tuple[str, ...] = tuple(b["id"] for b in BIOMES)
 
-# Flags set during loading — read by the chart section below
-is_prodes_data = False   # True when showing annual PRODES instead of monthly DETER
-data_note: str | None = None  # Info banner shown above the chart
+import threading as _threading
 
-with st.spinner("Carregando dados INPE… / Loading INPE data…"):
-    if metric == "fire":
-        raw_counts = _load_fire_monthly(single_state, single_biome_name, start_iso, end_iso)
-        if raw_counts:
-            monthly_df = pd.DataFrame(raw_counts)
-            monthly_df["month"] = pd.to_datetime(monthly_df["month"])
-            monthly_df = monthly_df.sort_values("month").reset_index(drop=True)
+_trends_result: dict = {}
+_trends_done = _threading.Event()
+
+def _load_trends_data() -> None:
+    result: dict = {"is_prodes_data": False, "data_note": None}
+    try:
+        if metric == "fire":
+            raw_counts = _load_fire_monthly(single_state, single_biome_name, start_iso, end_iso)
+            if raw_counts:
+                df = pd.DataFrame(raw_counts)
+                df["month"] = pd.to_datetime(df["month"])
+                df = df.sort_values("month").reset_index(drop=True)
+            else:
+                df = pd.DataFrame(columns=["month", "count"])
+            result.update({"monthly_df": df, "value_col": "count",
+                            "y_label": "Focos de calor / Fire hotspots",
+                            "source_label": "BDQueimadas — INPE"})
         else:
-            monthly_df = pd.DataFrame(columns=["month", "count"])
-        value_col = "count"
-        y_label = "Focos de calor / Fire hotspots"
-        source_label = "BDQueimadas — INPE"
-
-    else:
-        start_year = period_start.year
-        end_year = period_end.year
-
-        use_prodes = (
-            single_biome_id is not None
-            and single_biome_id not in _DETER_COVERED_BIOMES
-        )
-
-        if use_prodes:
-            # Non-DETER biome selected → use PRODES annual data
-            is_prodes_data = True
-            biome_display = next((b["name"] for b in BIOMES if b["id"] == single_biome_id), single_biome_id)
-            raw_prodes = _load_prodes_annual(
-                (single_biome_id,), single_state, start_year, end_year
+            _start_year = period_start.year
+            _end_year = period_end.year
+            _use_prodes = (
+                single_biome_id is not None
+                and single_biome_id not in _DETER_COVERED_BIOMES
             )
-            prodes_records = _reconstruct_prodes(raw_prodes)
-
-            # PRODES is annual: if fewer than 3 distinct years are available in the
-            # selected window, extend back automatically so the trend line is meaningful.
-            effective_start_year = start_year
-            if len({r.year for r in prodes_records if r.year}) < 3:
-                effective_start_year = _today.year - 5
-                raw_prodes = _load_prodes_annual(
-                    (single_biome_id,), single_state, effective_start_year, end_year
-                )
+            if _use_prodes:
+                result["is_prodes_data"] = True
+                biome_display = next((b["name"] for b in BIOMES if b["id"] == single_biome_id), single_biome_id)
+                raw_prodes = _load_prodes_annual((single_biome_id,), single_state, _start_year, _end_year)
                 prodes_records = _reconstruct_prodes(raw_prodes)
-
-            annual_df = prodes_annual_series(prodes_records)
-            # Rename so downstream trend/chart code uses "month" column uniformly
-            monthly_df = annual_df.rename(columns={"year_date": "month"})
-            extended = effective_start_year < start_year
-            data_note = (
-                f"{'⚠️ Período estendido automaticamente para mostrar dados suficientes. / Period automatically extended to show enough data points. ' if extended else ''}"
-                f"Dados PRODES anuais para **{biome_display}** "
-                f"({effective_start_year}–{end_year}). "
-                f"PRODES publica dados anuais (~novembro). "
-                f"Para monitoramento em tempo real, use os biomas Amazônia ou Cerrado (DETER).\n\n"
-                f"Annual PRODES data for **{biome_display}** ({effective_start_year}–{end_year}). "
-                f"PRODES publishes yearly data (~November). "
-                f"For near-real-time monitoring, select Amazônia or Cerrado (DETER)."
-            )
-        else:
-            # DETER-covered biome or no biome → use DETER
-            raw = _load_deter(single_state, single_biome_id, start_iso, end_iso)
-            records = _reconstruct_alerts(raw)
-
-            if len(selected_states) > 1:
-                records = [a for a in records if a.state in selected_states]
-            if len(selected_biomes) > 1:
-                allowed_names = {b["name"].lower() for b in BIOMES if b["id"] in selected_biomes}
-                records = [a for a in records if (a.biome or "").lower() in allowed_names]
-
-            monthly_df = deforestation_monthly_series(records)
-
-            # DETER returned nothing for this state — fall back to PRODES across all biomes
-            if monthly_df.empty and selected_states and not single_biome_id:
-                is_prodes_data = True
-                state_names = ", ".join(STATES.get(s, s) for s in selected_states)
-                raw_prodes = _load_prodes_annual(
-                    _ALL_PRODES_BIOMES, single_state, start_year, end_year
+                effective_start_year = _start_year
+                if len({r.year for r in prodes_records if r.year}) < 3:
+                    effective_start_year = _today.year - 5
+                    raw_prodes = _load_prodes_annual((single_biome_id,), single_state, effective_start_year, _end_year)
+                    prodes_records = _reconstruct_prodes(raw_prodes)
+                df = prodes_annual_series(prodes_records).rename(columns={"year_date": "month"})
+                extended = effective_start_year < _start_year
+                result["data_note"] = (
+                    f"{'⚠️ Período estendido automaticamente para mostrar dados suficientes. / Period automatically extended to show enough data points. ' if extended else ''}"
+                    f"Dados PRODES anuais para **{biome_display}** ({effective_start_year}–{_end_year}). "
+                    f"PRODES publica dados anuais (~novembro). Para monitoramento em tempo real, use os biomas Amazônia ou Cerrado (DETER).\n\n"
+                    f"Annual PRODES data for **{biome_display}** ({effective_start_year}–{_end_year}). "
+                    f"PRODES publishes yearly data (~November). For near-real-time monitoring, select Amazônia or Cerrado (DETER)."
                 )
-                prodes_records = _reconstruct_prodes(raw_prodes)
-                annual_df = prodes_annual_series(prodes_records, state=single_state)
-                monthly_df = annual_df.rename(columns={"year_date": "month"})
-                if not monthly_df.empty:
-                    data_note = (
-                        f"Nenhum dado DETER para **{state_names}** — "
-                        f"exibindo dados anuais PRODES (todos os biomas). "
-                        f"DETER cobre apenas Amazônia e Cerrado.\n\n"
-                        f"No DETER data for **{state_names}** — "
-                        f"showing annual PRODES data (all biomes). "
-                        f"DETER covers Amazônia and Cerrado only."
-                    )
+            else:
+                raw = _load_deter(single_state, single_biome_id, start_iso, end_iso)
+                records = _reconstruct_alerts(raw)
+                if len(selected_states) > 1:
+                    records = [a for a in records if a.state in selected_states]
+                if len(selected_biomes) > 1:
+                    allowed_names = {b["name"].lower() for b in BIOMES if b["id"] in selected_biomes}
+                    records = [a for a in records if (a.biome or "").lower() in allowed_names]
+                df = deforestation_monthly_series(records)
+                if df.empty and selected_states and not single_biome_id:
+                    result["is_prodes_data"] = True
+                    state_names = ", ".join(STATES.get(s, s) for s in selected_states)
+                    raw_prodes = _load_prodes_annual(_ALL_PRODES_BIOMES, single_state, _start_year, _end_year)
+                    prodes_records = _reconstruct_prodes(raw_prodes)
+                    df = prodes_annual_series(prodes_records, state=single_state).rename(columns={"year_date": "month"})
+                    if not df.empty:
+                        result["data_note"] = (
+                            f"Nenhum dado DETER para **{state_names}** — "
+                            f"exibindo dados anuais PRODES (todos os biomas). DETER cobre apenas Amazônia e Cerrado.\n\n"
+                            f"No DETER data for **{state_names}** — "
+                            f"showing annual PRODES data (all biomes). DETER covers Amazônia and Cerrado only."
+                        )
+            _prodes = result["is_prodes_data"]
+            result.update({
+                "monthly_df": df, "value_col": "area_km2",
+                "y_label": ("Área desmatada confirmada (km²) / Confirmed deforestation area (km²)"
+                            if _prodes else "Área de alertas DETER (km²) / DETER alert area (km²)"),
+                "source_label": ("PRODES — INPE (desmatamento anual confirmado)"
+                                 if _prodes else "DETER — INPE (alertas em tempo quase real)"),
+            })
+    except Exception as exc:
+        result["error"] = str(exc)
+    finally:
+        _trends_result.update(result)
+        _trends_done.set()
 
-        value_col = "area_km2"
-        y_label = (
-            "Área desmatada confirmada (km²) / Confirmed deforestation area (km²)"
-            if is_prodes_data
-            else "Área de alertas DETER (km²) / DETER alert area (km²)"
-        )
-        source_label = "PRODES — INPE (desmatamento anual confirmado)" if is_prodes_data else "DETER — INPE (alertas em tempo quase real)"
+_threading.Thread(target=_load_trends_data, daemon=True).start()
+
+_trends_status = st.empty()
+_trends_ticks = 0
+while not _trends_done.wait(timeout=2):
+    _trends_status.caption(
+        "⏳ Carregando dados INPE… / Loading INPE data…"
+        if _trends_ticks < 5
+        else "🌐 Aguardando resposta do TerraBrasilis… / Waiting for TerraBrasilis…"
+    )
+    _trends_ticks += 1
+_trends_status.empty()
+
+if "error" in _trends_result:
+    render_error_message(
+        _trends_result["error"],
+        suggestion="Verifique a conectividade com o TerraBrasilis. / Check connectivity.",
+        source="INPE",
+    )
+    st.stop()
+
+monthly_df: pd.DataFrame = _trends_result.get("monthly_df", pd.DataFrame())
+value_col: str = _trends_result.get("value_col", "area_km2")
+y_label: str = _trends_result.get("y_label", "")
+source_label: str = _trends_result.get("source_label", "INPE")
+is_prodes_data: bool = _trends_result.get("is_prodes_data", False)
+data_note: str | None = _trends_result.get("data_note")
 
 # ------------------------------------------------------------------ #
 # Region label                                                          #
