@@ -48,23 +48,13 @@ def _load_deter(
 ) -> list[dict]:
     from datetime import date
 
-    from src.services.inpe_integration.deter_client import (
-        fetch_deter_for_biomes,
-        fetch_deter_time_series,
-    )
+    from src.services.inpe_integration.deter_client import fetch_deter_for_biomes
 
     start = date.fromisoformat(start_iso)
     end = date.fromisoformat(end_iso)
 
-    if biome_ids_str:
-        alerts = fetch_deter_for_biomes(
-            state=state,
-            biome_ids=biome_ids_str.split(","),
-            start=start,
-            end=end,
-        )
-    else:
-        alerts = fetch_deter_time_series(state=state, start=start, end=end)
+    biome_ids = biome_ids_str.split(",") if biome_ids_str else ["amazonia", "cerrado"]
+    alerts = fetch_deter_for_biomes(state=state, biome_ids=biome_ids, start=start, end=end)
     return [a.model_dump(mode="json") for a in alerts]
 
 
@@ -104,31 +94,55 @@ single_state = fs.states[0] if len(fs.states) == 1 else None
 # Data loading                                                         #
 # ------------------------------------------------------------------ #
 
+import threading as _threading
+from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed as _as_completed
+
 fogo_error: str | None = None
 deter_error: str | None = None
 
-with st.spinner("Carregando focos de calor... / Loading fire hotspots..."):
-    fogo_states_str = ",".join(sorted(fs.states)) if fs.states else None
-    try:
-        fogo_raw = _load_fogo(fogo_states_str, None)
-        if len(fs.states) > 1:
-            pass  # CQL IN already applied inside _load_fogo
-    except Exception as exc:
-        fogo_raw = []
-        fogo_error = str(exc)
+fogo_states_str = ",".join(sorted(fs.states)) if fs.states else None
+biome_ids_str = ",".join(sorted(fs.biomes)) if fs.biomes else None
+_start_iso = period_start.isoformat()
+_end_iso = period_end.isoformat()
 
-with st.spinner("Carregando alertas DETER... / Loading DETER alerts..."):
-    biome_ids_str = ",".join(sorted(fs.biomes)) if fs.biomes else None
-    try:
-        deter_raw = _load_deter(
-            single_state, biome_ids_str,
-            period_start.isoformat(), period_end.isoformat(),
-        )
-        if len(fs.states) > 1:
-            deter_raw = _filter_dicts(deter_raw, "state", fs.states)
-    except Exception as exc:
-        deter_raw = []
-        deter_error = str(exc)
+_map_results: dict = {}
+_map_done = _threading.Event()
+
+def _load_map_data() -> None:
+    with _TPE(max_workers=2) as pool:
+        futures = {
+            pool.submit(_load_fogo, fogo_states_str, None): "fogo",
+            pool.submit(_load_deter, single_state, biome_ids_str, _start_iso, _end_iso): "deter",
+        }
+        for f in _as_completed(futures):
+            key = futures[f]
+            try:
+                _map_results[key] = f.result()
+            except Exception as exc:
+                _map_results[key] = []
+                _map_results[f"error_{key}"] = str(exc)
+    _map_done.set()
+
+_threading.Thread(target=_load_map_data, daemon=True).start()
+
+_map_status = st.empty()
+_map_ticks = 0
+while not _map_done.wait(timeout=2):
+    _map_status.caption(
+        "⏳ Carregando dados INPE… / Loading INPE data…"
+        if _map_ticks < 5
+        else "🌐 Aguardando resposta do TerraBrasilis… / Waiting for TerraBrasilis…"
+    )
+    _map_ticks += 1
+_map_status.empty()
+
+fogo_raw = _map_results.get("fogo", [])
+deter_raw = _map_results.get("deter", [])
+fogo_error = _map_results.get("error_fogo")
+deter_error = _map_results.get("error_deter")
+
+if len(fs.states) > 1:
+    deter_raw = _filter_dicts(deter_raw, "state", fs.states)
 
 # Reconstruct model objects for the map component
 fogo_hotspots: list[FireHotspot] = [FireHotspot.model_validate(r) for r in fogo_raw]
