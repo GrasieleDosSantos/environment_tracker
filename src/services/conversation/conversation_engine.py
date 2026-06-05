@@ -222,8 +222,15 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
                 # All requested biomes are non-DETER; skip DETER fetch entirely.
                 alerts_raw = []
         else:
-            alerts_raw = fetch_deter_time_series(
-                state=single_state, start=start, end=today
+            # No biome filter — fetch both DETER-covered layers so state queries
+            # get alerts from both Amazon and Cerrado (e.g. Tocantins has 98% of
+            # its alerts in the Cerrado layer; uf= CQL filter ensures records are
+            # state-specific and the two layers have no geographic overlap).
+            alerts_raw = fetch_deter_for_biomes(
+                state=single_state,
+                biome_ids=["amazonia", "cerrado"],
+                start=start,
+                end=today,
             )
 
         # --- PRODES annual data ---
