@@ -308,7 +308,7 @@ else:
                         if alert.region_id and alert.region_id not in _fs.states:
                             _fs.states = [alert.region_id]
                         st.session_state["filter_state"] = _fs
-                        st.switch_page("src/ui/pages/map_viewer.py")
+                        st.switch_page("ui/pages/map_viewer.py")
 
                 if alert.status == AlertStatus.ACTIVE:
                     if st.button(
