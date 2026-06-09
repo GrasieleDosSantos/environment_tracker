@@ -49,8 +49,8 @@ class Settings(BaseSettings):
     cache_ttl_fogo: int = Field(default=14400, description="4h cache for fire hotspots")
 
     # Alert thresholds
-    alert_threshold_fires: int = Field(
-        default=100, description="Fire hotspots per 24h per region to trigger alert"
+    alert_threshold_fires_pct: float = Field(
+        default=30.0, description="% above previous-week daily avg to trigger fire alert"
     )
     alert_threshold_deforestation: int = Field(
         default=50, description="% above 12-month average to trigger deforestation alert"

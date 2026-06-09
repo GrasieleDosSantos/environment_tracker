@@ -1,7 +1,7 @@
 """Alert generator: evaluates INPE data against configured thresholds.
 
-Fire outbreak:       fire hotspot count in the last 24 h exceeds alert_threshold_fires
-                     (default 100 per region, configurable in settings.py)
+Fire outbreak:       daily hotspot count exceeds alert_threshold_fires_pct % above the
+                     previous-week daily average (default 30 %, configurable in settings.py)
 Deforestation spike: deforestation area in the requested period exceeds
                      alert_threshold_deforestation % above the 12-month average
                      (default 50 %, configurable in settings.py)
@@ -29,11 +29,10 @@ _log = get_logger(__name__)
 # Severity helpers                                                      #
 # ------------------------------------------------------------------ #
 
-def _fire_severity(count: int, threshold: int) -> AlertSeverity:
-    ratio = count / max(threshold, 1)
-    if ratio >= 10:
+def _fire_severity(pct_above: float) -> AlertSeverity:
+    if pct_above >= 200:
         return AlertSeverity.CRITICAL
-    if ratio >= 5:
+    if pct_above >= 100:
         return AlertSeverity.HIGH
     return AlertSeverity.MEDIUM
 
@@ -82,6 +81,7 @@ def generate_alert(
 
 def evaluate_alert_thresholds(
     fire_count_24h: int,
+    avg_fire_count_prev_week: float | None,
     deforestation_km2: float,
     avg_deforestation_km2: float | None,
     region_id: str | None = None,
@@ -89,37 +89,49 @@ def evaluate_alert_thresholds(
 ) -> list[EnvironmentalAlert]:
     """Evaluate snapshot values against configured thresholds.
 
+    Fire alert triggers when today's hotspot count is more than
+    ``alert_threshold_fires_pct`` % above the previous week's daily average.
+    Deforestation alert triggers when the current area exceeds
+    ``alert_threshold_deforestation`` % above the 12-month monthly average.
+
     Returns a (possibly empty) list of new EnvironmentalAlert objects.
     Callers are responsible for persisting them via ``persist_alerts()``.
     """
     settings = get_settings()
-    fire_threshold = settings.alert_threshold_fires
+    fire_pct_threshold = settings.alert_threshold_fires_pct
     deforest_pct_threshold = settings.alert_threshold_deforestation
 
     alerts: list[EnvironmentalAlert] = []
 
-    # Fire outbreak check
-    if fire_count_24h >= fire_threshold:
-        severity = _fire_severity(fire_count_24h, fire_threshold)
-        location = biome_id or region_id or "Brasil"
-        alerts.append(generate_alert(
-            event_type=AlertType.FIRE_OUTBREAK,
-            severity=severity,
-            description=(
-                f"Surto de queimadas detectado: {fire_count_24h} focos nas últimas 24h "
-                f"({location}). / Fire outbreak detected: {fire_count_24h} hotspots "
-                f"in the last 24 h ({location})."
-            ),
-            recommendation=(
-                "Monitore as áreas de risco e acione os órgãos responsáveis. "
-                "/ Monitor risk areas and notify relevant authorities."
-            ),
-            region_id=region_id,
-            biome_id=biome_id,
-            raw_value=float(fire_count_24h),
-            threshold_value=float(fire_threshold),
-            data_source=INPESource.FOGO,
-        ))
+    # Fire outbreak check — percentage above previous-week daily average
+    if (
+        avg_fire_count_prev_week is not None
+        and avg_fire_count_prev_week > 0
+        and fire_count_24h > 0
+    ):
+        fire_pct_above = ((fire_count_24h - avg_fire_count_prev_week) / avg_fire_count_prev_week) * 100
+        if fire_pct_above >= fire_pct_threshold:
+            severity = _fire_severity(fire_pct_above)
+            location = biome_id or region_id or "Brasil"
+            alerts.append(generate_alert(
+                event_type=AlertType.FIRE_OUTBREAK,
+                severity=severity,
+                description=(
+                    f"Surto de queimadas detectado: {fire_count_24h} focos hoje em {location} "
+                    f"({fire_pct_above:.0f}% acima da média diária da semana anterior). "
+                    f"/ Fire outbreak detected: {fire_count_24h} hotspots today in {location} "
+                    f"({fire_pct_above:.0f}% above previous-week daily average)."
+                ),
+                recommendation=(
+                    "Monitore as áreas de risco e acione os órgãos responsáveis. "
+                    "/ Monitor risk areas and notify relevant authorities."
+                ),
+                region_id=region_id,
+                biome_id=biome_id,
+                raw_value=float(fire_count_24h),
+                threshold_value=round(avg_fire_count_prev_week, 2),
+                data_source=INPESource.FOGO,
+            ))
 
     # Deforestation spike check
     if (
@@ -244,22 +256,34 @@ def run_alert_check(
     Returns the list of newly generated alerts (may be empty).
     """
     from src.services.inpe_integration.deter_client import fetch_deter_for_biomes, fetch_deter_time_series
-    from src.services.inpe_integration.fogo_client import fetch_current_hotspots
+    from src.services.inpe_integration.fogo_client import fetch_current_hotspots, fetch_fire_risk
     from src.utils.date_utils import today_brazil
-    from datetime import date
 
     today = today_brazil()
     year_ago = today - timedelta(days=365)
 
-    # Fire: last 48 h hotspots as a proxy for 24 h (WFS hourly resolution varies)
+    # Fire: compare today's 48h count against previous-week daily average
     try:
-        hotspots_48h = fetch_current_hotspots(state=state, biome=biome_id)
-        fire_count = len(hotspots_48h)
+        hotspots_today = fetch_current_hotspots(state=state, biome=biome_id)
+        fire_count = len(hotspots_today)
+
+        # Previous week: 8–14 days ago (excludes today's window to avoid overlap)
+        hotspots_prev_week = fetch_fire_risk(state=state, biome=biome_id, days=14)
+        # Keep only hotspots older than 48 h (proxy for "previous week")
+        from datetime import timezone as _tz
+        cutoff = today - timedelta(days=2)
+        prev_week_hotspots = [
+            h for h in hotspots_prev_week
+            if (h.detection_time.date() if h.detection_time else h.date_pas or today) <= cutoff
+        ]
+        # Daily average over 7 days
+        avg_fire_prev_week: float | None = len(prev_week_hotspots) / 7.0
     except Exception as exc:
         _log.warning("alert_check_fogo_failed", error=str(exc))
         fire_count = 0
+        avg_fire_prev_week = None
 
-    # Deforestation: current period vs. 12-month average
+    # Deforestation: current 30-day period vs. 12-month monthly average
     try:
         if biome_id:
             recent = fetch_deter_for_biomes(
@@ -278,9 +302,7 @@ def run_alert_check(
                 state=state, start=year_ago, end=today,
             )
         deforest_km2 = sum(a.area_km2 or 0.0 for a in recent)
-        # Monthly average from the last 12 months
-        months_with_data = 12
-        avg_monthly = sum(a.area_km2 or 0.0 for a in historical) / months_with_data
+        avg_monthly = sum(a.area_km2 or 0.0 for a in historical) / 12
     except Exception as exc:
         _log.warning("alert_check_deter_failed", error=str(exc))
         deforest_km2 = 0.0
@@ -288,6 +310,7 @@ def run_alert_check(
 
     alerts = evaluate_alert_thresholds(
         fire_count_24h=fire_count,
+        avg_fire_count_prev_week=avg_fire_prev_week,
         deforestation_km2=deforest_km2,
         avg_deforestation_km2=avg_monthly,
         region_id=state,

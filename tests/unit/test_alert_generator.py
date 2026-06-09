@@ -22,6 +22,9 @@ from src.services.analysis.alert_generator import (
     generate_alert,
 )
 
+# Default threshold used by evaluate_alert_thresholds (from settings default)
+_FIRE_PCT_THRESHOLD = 30.0
+
 
 # ------------------------------------------------------------------ #
 # _fire_severity                                                        #
@@ -29,26 +32,23 @@ from src.services.analysis.alert_generator import (
 
 class TestFireSeverity:
     def test_just_at_threshold_is_medium(self):
-        assert _fire_severity(100, 100) == AlertSeverity.MEDIUM
+        # 30% above → MEDIUM (minimum trigger)
+        assert _fire_severity(30.0) == AlertSeverity.MEDIUM
 
-    def test_five_times_threshold_is_high(self):
-        # ratio = 500/100 = 5.0 → HIGH
-        assert _fire_severity(500, 100) == AlertSeverity.HIGH
+    def test_99_pct_above_is_medium(self):
+        assert _fire_severity(99.9) == AlertSeverity.MEDIUM
 
-    def test_ten_times_threshold_is_critical(self):
-        # ratio = 1000/100 = 10.0 → CRITICAL
-        assert _fire_severity(1000, 100) == AlertSeverity.CRITICAL
+    def test_100_pct_above_is_high(self):
+        assert _fire_severity(100.0) == AlertSeverity.HIGH
 
-    def test_below_five_times_is_medium(self):
-        # ratio = 499/100 = 4.99 → MEDIUM
-        assert _fire_severity(499, 100) == AlertSeverity.MEDIUM
+    def test_199_pct_above_is_high(self):
+        assert _fire_severity(199.9) == AlertSeverity.HIGH
 
-    def test_just_above_ten_is_critical(self):
-        assert _fire_severity(1001, 100) == AlertSeverity.CRITICAL
+    def test_200_pct_above_is_critical(self):
+        assert _fire_severity(200.0) == AlertSeverity.CRITICAL
 
-    def test_custom_threshold_scales_correctly(self):
-        # threshold=50, count=500 → ratio=10 → CRITICAL
-        assert _fire_severity(500, 50) == AlertSeverity.CRITICAL
+    def test_very_large_pct_is_critical(self):
+        assert _fire_severity(999.0) == AlertSeverity.CRITICAL
 
 
 # ------------------------------------------------------------------ #
@@ -145,123 +145,120 @@ class TestGenerateAlert:
 # ------------------------------------------------------------------ #
 
 class TestEvaluateAlertThresholds:
-    """Uses default settings thresholds: fire=100, deforest=50%."""
+    """Uses default settings thresholds: fire=30% above prev-week avg, deforest=50%."""
 
-    def test_no_alerts_when_below_thresholds(self):
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=50,
-            deforestation_km2=10.0,
-            avg_deforestation_km2=100.0,  # 10 is 90% BELOW average — no spike
+    # Helper: build a kwargs dict that passes the fire avg and deforestation args
+    @staticmethod
+    def _kw(fire_count=0, avg_fire=None, deforest_km2=0.0, avg_deforest=None, **extra):
+        return dict(
+            fire_count_24h=fire_count,
+            avg_fire_count_prev_week=avg_fire,
+            deforestation_km2=deforest_km2,
+            avg_deforestation_km2=avg_deforest,
+            **extra,
         )
+
+    def test_no_alerts_when_below_fire_threshold(self):
+        # 100 count, avg=100 → 0% above → below 30% → no alert
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=100, avg_fire=100.0))
         assert alerts == []
 
-    def test_fire_alert_at_threshold(self):
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=100,
-            deforestation_km2=0.0,
-            avg_deforestation_km2=None,
-        )
+    def test_no_alerts_when_deforest_below_threshold(self):
+        # 10 km² vs avg=100 → 90% BELOW → no alert
+        alerts = evaluate_alert_thresholds(**self._kw(deforest_km2=10.0, avg_deforest=100.0))
+        assert alerts == []
+
+    def test_fire_alert_at_30_pct_above_avg(self):
+        # count=130, avg=100 → exactly 30% above → alert
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=130, avg_fire=100.0))
         assert len(alerts) == 1
         assert alerts[0].event_type == AlertType.FIRE_OUTBREAK
 
-    def test_fire_alert_has_correct_severity(self):
-        # 1000 hotspots at threshold=100 → ratio=10 → CRITICAL
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=1000,
-            deforestation_km2=0.0,
-            avg_deforestation_km2=None,
-        )
+    def test_fire_alert_below_30_pct_no_alert(self):
+        # count=129, avg=100 → 29% above → no alert
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=129, avg_fire=100.0))
+        assert alerts == []
+
+    def test_fire_alert_severity_medium_at_threshold(self):
+        # 30% above → MEDIUM
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=130, avg_fire=100.0))
+        assert alerts[0].severity_level == AlertSeverity.MEDIUM
+
+    def test_fire_alert_severity_high_at_100_pct(self):
+        # 200 count, avg=100 → 100% above → HIGH
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=200, avg_fire=100.0))
+        assert alerts[0].severity_level == AlertSeverity.HIGH
+
+    def test_fire_alert_severity_critical_at_200_pct(self):
+        # 300 count, avg=100 → 200% above → CRITICAL
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=300, avg_fire=100.0))
         assert alerts[0].severity_level == AlertSeverity.CRITICAL
 
-    def test_fire_alert_raw_value_matches_count(self):
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=250,
-            deforestation_km2=0.0,
-            avg_deforestation_km2=None,
-        )
-        assert alerts[0].raw_value == pytest.approx(250.0)
+    def test_fire_alert_raw_value_is_current_count(self):
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=150, avg_fire=100.0))
+        assert alerts[0].raw_value == pytest.approx(150.0)
         assert alerts[0].data_source == INPESource.FOGO
 
+    def test_fire_alert_threshold_value_is_avg(self):
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=150, avg_fire=100.0))
+        assert alerts[0].threshold_value == pytest.approx(100.0)
+
+    def test_fire_skipped_when_avg_is_none(self):
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=500, avg_fire=None))
+        assert alerts == []
+
+    def test_fire_skipped_when_avg_is_zero(self):
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=500, avg_fire=0.0))
+        assert alerts == []
+
+    def test_fire_skipped_when_count_is_zero(self):
+        alerts = evaluate_alert_thresholds(**self._kw(fire_count=0, avg_fire=100.0))
+        assert alerts == []
+
     def test_deforestation_spike_alert(self):
-        # avg=100, current=160 → 60% above avg (>50%) → alert
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=0,
-            deforestation_km2=160.0,
-            avg_deforestation_km2=100.0,
-        )
+        # avg=100, current=160 → 60% above (>50%) → alert
+        alerts = evaluate_alert_thresholds(**self._kw(deforest_km2=160.0, avg_deforest=100.0))
         assert len(alerts) == 1
         assert alerts[0].event_type == AlertType.DEFORESTATION_SPIKE
 
     def test_deforestation_spike_affected_area_set(self):
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=0,
-            deforestation_km2=160.0,
-            avg_deforestation_km2=100.0,
-        )
+        alerts = evaluate_alert_thresholds(**self._kw(deforest_km2=160.0, avg_deforest=100.0))
         assert alerts[0].affected_area_km2 == pytest.approx(160.0)
         assert alerts[0].data_source == INPESource.DETER
 
     def test_deforestation_no_alert_below_threshold(self):
-        # avg=100, current=149 → 49% above → below 50% threshold
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=0,
-            deforestation_km2=149.0,
-            avg_deforestation_km2=100.0,
-        )
+        # 149/100 = 49% above → below 50% threshold
+        alerts = evaluate_alert_thresholds(**self._kw(deforest_km2=149.0, avg_deforest=100.0))
         assert alerts == []
 
     def test_deforestation_skipped_when_avg_is_none(self):
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=0,
-            deforestation_km2=500.0,
-            avg_deforestation_km2=None,
-        )
+        alerts = evaluate_alert_thresholds(**self._kw(deforest_km2=500.0, avg_deforest=None))
         assert alerts == []
 
     def test_deforestation_skipped_when_avg_is_zero(self):
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=0,
-            deforestation_km2=500.0,
-            avg_deforestation_km2=0.0,
-        )
+        alerts = evaluate_alert_thresholds(**self._kw(deforest_km2=500.0, avg_deforest=0.0))
         assert alerts == []
 
     def test_deforestation_skipped_when_current_is_zero(self):
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=0,
-            deforestation_km2=0.0,
-            avg_deforestation_km2=100.0,
-        )
+        alerts = evaluate_alert_thresholds(**self._kw(deforest_km2=0.0, avg_deforest=100.0))
         assert alerts == []
 
     def test_both_thresholds_exceeded_returns_two_alerts(self):
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=500,
-            deforestation_km2=200.0,
-            avg_deforestation_km2=100.0,  # 100% above avg
-        )
+        alerts = evaluate_alert_thresholds(**self._kw(
+            fire_count=200, avg_fire=100.0,   # 100% above → HIGH
+            deforest_km2=200.0, avg_deforest=100.0,  # 100% above → HIGH
+        ))
         types = {a.event_type for a in alerts}
         assert AlertType.FIRE_OUTBREAK in types
         assert AlertType.DEFORESTATION_SPIKE in types
 
-    def test_region_and_biome_propagated_to_alerts(self):
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=200,
-            deforestation_km2=0.0,
-            avg_deforestation_km2=None,
-            region_id="MT",
-            biome_id="cerrado",
-        )
+    def test_region_and_biome_propagated_to_fire_alert(self):
+        alerts = evaluate_alert_thresholds(**self._kw(
+            fire_count=200, avg_fire=100.0,
+            region_id="MT", biome_id="cerrado",
+        ))
         assert alerts[0].region_id == "MT"
         assert alerts[0].biome_id == "cerrado"
-
-    def test_fire_alert_below_threshold_no_alert(self):
-        alerts = evaluate_alert_thresholds(
-            fire_count_24h=99,
-            deforestation_km2=0.0,
-            avg_deforestation_km2=None,
-        )
-        assert alerts == []
 
 
 # ------------------------------------------------------------------ #

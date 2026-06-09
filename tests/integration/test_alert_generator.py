@@ -210,8 +210,10 @@ class TestPersistAlertsEscalation:
 
 class TestEndToEndEvaluateAndPersist:
     def test_fire_threshold_exceeded_creates_db_row(self):
+        # 200 count vs avg=100 → 100% above → HIGH → alert
         alerts = evaluate_alert_thresholds(
             fire_count_24h=200,
+            avg_fire_count_prev_week=100.0,
             deforestation_km2=0.0,
             avg_deforestation_km2=None,
             region_id="RO",
@@ -225,9 +227,10 @@ class TestEndToEndEvaluateAndPersist:
 
     def test_both_thresholds_creates_two_rows(self):
         alerts = evaluate_alert_thresholds(
-            fire_count_24h=500,
+            fire_count_24h=200,
+            avg_fire_count_prev_week=100.0,   # 100% above
             deforestation_km2=200.0,
-            avg_deforestation_km2=100.0,
+            avg_deforestation_km2=100.0,       # 100% above
             region_id="MT",
             biome_id="cerrado",
         )
@@ -235,8 +238,11 @@ class TestEndToEndEvaluateAndPersist:
         assert _count_alerts_in_db() == 2
 
     def test_below_thresholds_creates_no_rows(self):
+        # fire: 110 vs avg=100 → 10% above → below 30% threshold
+        # deforest: 10 vs avg=100 → 90% BELOW → no alert
         alerts = evaluate_alert_thresholds(
-            fire_count_24h=50,
+            fire_count_24h=110,
+            avg_fire_count_prev_week=100.0,
             deforestation_km2=10.0,
             avg_deforestation_km2=100.0,
         )
