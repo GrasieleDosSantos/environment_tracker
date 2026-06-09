@@ -201,7 +201,7 @@ def persist_alerts(alerts: list[EnvironmentalAlert]) -> int:
                     existing.severity_level = alert.severity_level.value
                     existing.raw_value = alert.raw_value
                     existing.description = alert.description
-                    existing.updated_at = datetime.utcnow()
+                    existing.updated_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
                     _log.info(
                         "alert_escalated",
                         alert_id=existing.alert_id,
