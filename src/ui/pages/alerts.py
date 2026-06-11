@@ -114,9 +114,19 @@ with st.sidebar:
 
     st.divider()
 
+    _has_region = bool(_biome_filter or _state_filter)
+
     # Trigger a fresh alert check for the selected filters
-    if st.button("🔍 Verificar alertas agora / Check alerts now", use_container_width=True):
-        st.session_state["alerts_check_requested"] = True
+    st.button(
+        "🔍 Verificar alertas agora / Check alerts now",
+        use_container_width=True,
+        disabled=not _has_region,
+        help=(
+            None if _has_region
+            else "Selecione um bioma ou estado para verificar alertas. / Select a biome or state first."
+        ),
+        on_click=lambda: st.session_state.update({"alerts_check_requested": True}),
+    )
 
 # ------------------------------------------------------------------ #
 # Auto-check: run once per session if no alerts exist for today         #
@@ -139,7 +149,15 @@ def _count_today_alerts() -> int:
 _check_requested = st.session_state.pop("alerts_check_requested", False)
 _auto_checked = st.session_state.get("alerts_auto_checked", False)
 
-if _check_requested or (not _auto_checked):
+if not _has_region:
+    st.info(
+        "Selecione um **bioma** ou **estado** na barra lateral para verificar alertas nessa região. "
+        "/ Select a **biome** or **state** in the sidebar to check alerts for that region.",
+        icon="📍",
+    )
+    # Reset auto-check flag so the check runs as soon as a region is selected
+    st.session_state["alerts_auto_checked"] = False
+elif _check_requested or not _auto_checked:
     _result: dict = {}
     _done = threading.Event()
 
