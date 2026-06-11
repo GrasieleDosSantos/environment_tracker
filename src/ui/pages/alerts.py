@@ -94,21 +94,21 @@ with st.sidebar:
         key="alerts_status_filter",
     )
 
-    _biome_options = [""] + [b["id"] for b in BIOMES]
-    _biome_filter: str = st.selectbox(
+    _biome_filter: str | None = st.selectbox(
         "Bioma / Biome",
-        options=_biome_options,
-        format_func=lambda b: "Todos / All" if not b else next(
-            (x["name"] for x in BIOMES if x["id"] == b), b
-        ),
+        options=[b["id"] for b in BIOMES],
+        format_func=lambda b: next((x["name"] for x in BIOMES if x["id"] == b), b),
+        index=None,
+        placeholder="Selecione um bioma… / Select a biome…",
         key="alerts_biome_filter",
     )
 
-    _state_options = [""] + list(STATES.keys())
-    _state_filter: str = st.selectbox(
+    _state_filter: str | None = st.selectbox(
         "Estado / State",
-        options=_state_options,
-        format_func=lambda s: "Todos / All" if not s else f"{s} — {STATES.get(s, s)}",
+        options=list(STATES.keys()),
+        format_func=lambda s: f"{s} — {STATES.get(s, s)}",
+        index=None,
+        placeholder="Selecione um estado… / Select a state…",
         key="alerts_state_filter",
     )
 
