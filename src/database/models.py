@@ -59,3 +59,4 @@ class AlertDB(Base):
     raw_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     threshold_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

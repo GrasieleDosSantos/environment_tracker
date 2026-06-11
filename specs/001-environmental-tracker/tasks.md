@@ -161,9 +161,9 @@
 
 **Independent Test**: Seed test data exceeding fire threshold (>100 hotspots/24h); verify alert appears in Alerts page within 2 minutes with correct severity, location, and recommended action.
 
-- [ ] T048 [US4] Create `src/services/analysis/alert_generator.py`: `evaluate_alert_thresholds(data) -> list[EnvironmentalAlert]`, `generate_alert()`, `check_alert_escalation()`; thresholds from `config/constants.py`; alert types: fire outbreak (>100 hotspots/24h), deforestation spike (>50% above 12-month avg)
-- [ ] T049 [US4] Generate Alembic migration for any new alert status fields: `alembic revision --autogenerate -m "alert status fields"`
-- [ ] T050 [US4] Create `src/ui/pages/alerts.py`: alert list sorted by severity + recency, filter by type/status, dismiss/archive actions, click-through that sets map filter to the alert's region
+- [X] T048 [US4] Create `src/services/analysis/alert_generator.py`: `evaluate_alert_thresholds(data) -> list[EnvironmentalAlert]`, `generate_alert()`, `check_alert_escalation()`; thresholds from `config/constants.py`; alert types: fire outbreak (>100 hotspots/24h), deforestation spike (>50% above 12-month avg)
+- [X] T049 [US4] Generate Alembic migration for any new alert status fields: `alembic revision --autogenerate -m "alert status fields"`
+- [X] T050 [US4] Create `src/ui/pages/alerts.py`: alert list sorted by severity + recency, filter by type/status, dismiss/archive actions, click-through that sets map filter to the alert's region
 
 **Checkpoint**: Alerts generate automatically from INPE data, display with severity hierarchy, and link to map view.
 
