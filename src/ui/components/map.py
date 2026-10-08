@@ -25,6 +25,7 @@ from jinja2 import Template
 from src.config.constants import BIOMES, STATES
 from src.services.inpe_integration.deter_client import DETERAlert
 from src.services.inpe_integration.fogo_client import FireHotspot
+from src.ui.components.basemap import get_basemap
 
 _DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "geojson"
 
@@ -352,9 +353,11 @@ def render_brazil_map(
         zoom_start=zoom_start,
         tiles=None,
     )
+    basemap = get_basemap()
     folium.TileLayer(
-        tiles="CartoDB positron",
-        attr="© OpenStreetMap contributors © CARTO",
+        tiles=basemap.url,
+        attr=basemap.attribution,
+        subdomains=basemap.subdomains or "abc",
         control=False,
     ).add_to(m)
 
