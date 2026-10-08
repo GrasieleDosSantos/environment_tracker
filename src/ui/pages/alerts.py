@@ -319,8 +319,8 @@ else:
                         use_container_width=True,
                     ):
                         # Pre-fill shared filter state so map page opens filtered
-                        from src.ui.components.filters import FilterState
-                        _fs = st.session_state.get("filter_state", FilterState())
+                        from src.ui.components.filters import get_filter_state
+                        _fs = get_filter_state()
                         if alert.biome_id and alert.biome_id not in _fs.biomes:
                             _fs.biomes = [alert.biome_id]
                         if alert.region_id and alert.region_id not in _fs.states:
