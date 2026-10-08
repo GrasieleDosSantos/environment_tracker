@@ -123,46 +123,6 @@ class ConversationReply:
 _DETER_COVERED_BIOMES: frozenset[str] = frozenset({"amazonia", "cerrado"})
 
 
-def _fetch_prodes_per_year(
-    biome_ids: list[str],
-    state: str | None,
-    start_year: int,
-    end_year: int,
-) -> list:
-    """Fetch PRODES records year-by-year in parallel so each year is fully sampled.
-
-    A single multi-year WFS query returns records in insertion order (oldest first),
-    causing the 5 000-record cap to be consumed by one year only.  Per-year queries
-    guarantee every year is represented with its own 5 000-record sample, and parallel
-    execution keeps the wall-clock time comparable to a single request.
-    """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    from src.services.inpe_integration.prodes_client import fetch_prodes_for_biomes
-
-    years = list(range(start_year, end_year + 1))
-
-    all_records: list = []
-    with ThreadPoolExecutor(max_workers=min(len(years), 4)) as executor:
-        futures = {
-            executor.submit(
-                fetch_prodes_for_biomes,
-                biome_ids=biome_ids,
-                state=state,
-                start_year=yr,
-                end_year=yr,
-                count=5000,
-            ): yr
-            for yr in years
-        }
-        for future in as_completed(futures):
-            try:
-                all_records.extend(future.result())
-            except Exception:
-                pass
-
-    return all_records
-
-
 def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
     """Fetch INPE snapshot data relevant to the parsed query.
 
@@ -173,8 +133,8 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
     - FOGO (BDQueimadas): fire hotspots, always fetched when fire is a metric.
     - DETER: near-real-time deforestation alerts for Amazônia + Cerrado only.
     - PRODES: annual deforestation for all 6 biomes; fetched when the query
-      targets non-DETER biomes (Pampa, Caatinga, Mata Atlântica, Pantanal)
-      or when DETER returns nothing for the requested scope.
+      targets non-DETER biomes (Pampa, Caatinga, Mata Atlântica, Pantanal),
+      spans a year or more (annual trends), or DETER returns nothing.
     """
     from src.services.analysis.aggregator import aggregate_multi_source
 
@@ -234,24 +194,42 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
             )
 
         # --- PRODES annual data ---
-        # Fetch when: non-DETER biomes are explicitly requested, OR when
-        # deforestation is a metric and DETER returned nothing.
+        # Fetch when deforestation is a metric and: non-DETER biomes are
+        # requested, OR the scope spans a year or more (annual trends need
+        # PRODES even for DETER biomes), OR DETER returned nothing.
         prodes_records: list = []
+        prodes_rates: dict[int, float] = {}
         non_deter_biomes = [b for b in pq.biomes if b not in _DETER_COVERED_BIOMES]
+        long_term = period_days >= 365
         need_prodes = (
             "deforestation" in (pq.metrics or [])
-            and (bool(non_deter_biomes) or (not pq.biomes and not alerts_raw))
+            and (bool(non_deter_biomes) or long_term or (not pq.biomes and not alerts_raw))
         )
         if need_prodes:
             from src.config.constants import BIOMES as _ALL_BIOMES
-            prodes_biome_ids = non_deter_biomes if non_deter_biomes else [b["id"] for b in _ALL_BIOMES]
+            if long_term and pq.biomes:
+                prodes_biome_ids = list(pq.biomes)
+            elif non_deter_biomes:
+                prodes_biome_ids = non_deter_biomes
+            else:
+                prodes_biome_ids = [b["id"] for b in _ALL_BIOMES]
+            from src.services.inpe_integration.prodes_dashboard import (
+                fetch_legal_amazon_rates,
+                fetch_prodes_annual_totals,
+            )
             years_back = _scope_to_prodes_years(pq.temporal_scope)
-            prodes_records = _fetch_prodes_per_year(
+            prodes_start = today.year - years_back
+            prodes_end = today.year - 1  # PRODES publishes previous year
+            prodes_records = fetch_prodes_annual_totals(
                 biome_ids=prodes_biome_ids,
                 state=single_state,
-                start_year=today.year - years_back,
-                end_year=today.year - 1,  # PRODES publishes previous year
+                start_year=prodes_start,
+                end_year=prodes_end,
             )
+            if "amazonia" in prodes_biome_ids:
+                prodes_rates = fetch_legal_amazon_rates(
+                    start_year=prodes_start, end_year=prodes_end, state=single_state
+                )
 
         # --- Region label ---
         region_parts: list[str] = []
@@ -295,6 +273,7 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
             "hotspots_48h": hotspots_48h,
             "alerts": alerts_raw,
             "prodes_records": prodes_records,
+            "prodes_rates": prodes_rates,
         }
 
     except Exception:
@@ -446,7 +425,9 @@ class ConversationService:
         if "deforestation" in pq.metrics and alerts:
             data_block += "\n\n" + format_deforestation_detail(alerts)
         if "deforestation" in pq.metrics and prodes_records:
-            data_block += "\n\n" + format_prodes_detail(prodes_records)
+            data_block += "\n\n" + format_prodes_detail(
+                prodes_records, rates=data.get("prodes_rates")
+            )
 
         # 4. Compose message list: system + history + data context + new user msg
         history = get_context(session_id)

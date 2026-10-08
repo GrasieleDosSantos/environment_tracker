@@ -209,3 +209,17 @@ class TestParseQuery:
         pq = parse_query("dados do Rio")
         assert pq.needs_clarification
         assert len(pq.clarification_options) > 0
+
+
+class TestStateCodeCase:
+    def test_lowercase_english_words_are_not_states(self):
+        states, _, _ = _extract_states("Don't you have access to the prodes data? I am going to go")
+        assert states == []
+
+    def test_lowercase_portuguese_words_are_not_states(self):
+        states, _, _ = _extract_states("se o desmatamento es ma pe ba")
+        assert states == []
+
+    def test_uppercase_codes_still_match(self):
+        states, _, _ = _extract_states("queimadas em TO e GO")
+        assert set(states) == {"TO", "GO"}

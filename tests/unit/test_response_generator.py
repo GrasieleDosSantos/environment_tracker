@@ -133,12 +133,23 @@ class TestFormatProdesDetail:
         assert "Pampa" in out
         assert "Caatinga" in out
 
-    def test_capped_year_warning_shown(self):
+    def test_no_partial_sample_warning(self):
+        # Totals are exact (dashboard aggregates), so the old sampling caveat is gone
         from src.services.inpe_integration.prodes_client import PRODESData
-        # Simulate 5000 records for year 2024
-        records = [PRODESData(year=2024, biome="Mata Atlântica", area_km2=0.04, state="SP")] * 5000
+        records = [PRODESData(year=2024, biome="Amazônia", area_km2=6070.8)]
         out = format_prodes_detail(records)
-        assert "amostra parcial" in out or "partial sample" in out
+        assert "amostra parcial" not in out and "partial sample" not in out
+
+    def test_official_rates_table_shown(self):
+        from src.services.inpe_integration.prodes_client import PRODESData
+        records = [PRODESData(year=2021, biome="Amazônia", area_km2=12000.0)]
+        out = format_prodes_detail(records, rates={2021: 13038.0, 2020: 10851.0})
+        assert "Amazônia Legal" in out
+        assert "| 2021 | 13,038 |" in out
+        assert out.index("| 2021 | 13,038 |") < out.index("| 2020 | 10,851 |")
+
+    def test_rates_omitted_when_absent(self, prodes_records):
+        assert "Taxa oficial" not in format_prodes_detail(prodes_records)
 
     def test_source_attribution_present(self, prodes_records):
         out = format_prodes_detail(prodes_records)
