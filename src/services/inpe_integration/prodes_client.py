@@ -1,7 +1,7 @@
 """PRODES — annual Amazon deforestation program client.
 
-WFS endpoint: terrabrasilis.dpi.inpe.br/geoserver/prodes-amz-nb/ows
-Layer:        prodes-amz-nb:yearly_deforestation_biome
+WFS endpoint: terrabrasilis.dpi.inpe.br/geoserver/prodes-amazon-nb/ows
+Layer:        prodes-amazon-nb:yearly_deforestation_biome
 Update freq:  annual (published ~November)
 Cache TTL:    30 days
 """

@@ -46,8 +46,8 @@ GET https://terrabrasilis.dpi.inpe.br/geoserver/deter-amz/ows
 
 | Property | Value |
 |----------|-------|
-| WFS endpoint | `https://terrabrasilis.dpi.inpe.br/geoserver/prodes-amz-nb/ows` |
-| Key layer | `prodes-amz-nb:yearly_deforestation_biome` |
+| WFS endpoint | `https://terrabrasilis.dpi.inpe.br/geoserver/prodes-amazon-nb/ows` |
+| Key layer | `prodes-amazon-nb:yearly_deforestation_biome` |
 | Response formats | GeoJSON, Shapefile |
 | Update frequency | Annual (published ~November each year for previous year) |
 | Historical depth | 1988 to present |
@@ -92,7 +92,7 @@ Based on the above research, the confirmed endpoints are:
 
 ```env
 INPE_DETER_ENDPOINT=https://terrabrasilis.dpi.inpe.br/geoserver/deter-amz/ows
-INPE_PRODES_ENDPOINT=https://terrabrasilis.dpi.inpe.br/geoserver/prodes-amz-nb/ows
+INPE_PRODES_ENDPOINT=https://terrabrasilis.dpi.inpe.br/geoserver/prodes-amazon-nb/ows
 INPE_FOGO_ENDPOINT=https://terrabrasilis.dpi.inpe.br/queimadas/geoserver/ows
 ```
 
@@ -273,7 +273,7 @@ states_gdf = gpd.read_file(url)
 https://www.ibge.gov.br/geociencias/informacoes-ambientais/estudos-ambientais/15842-biomas.html
 ```
 - Direct GeoJSON/Shapefile download available at 1:5,000,000 scale (~4MB Shapefile)
-- Also accessible via TerraBrasilis: `https://terrabrasilis.dpi.inpe.br/geoserver/bdq/ows` (layer: `bdq:bioma`)
+- ~~Also accessible via TerraBrasilis: `https://terrabrasilis.dpi.inpe.br/geoserver/bdq/ows` (layer: `bdq:bioma`)~~ — returns 404 as of 2026-10-08; use the IBGE download above
 
 ⚠️ **Action for T000g**: Download both files and replace the placeholder `null` geometries in `data/geojson/`. See script below.
 
@@ -289,7 +289,7 @@ states = gpd.read_file(
 )
 states.to_file("data/geojson/states.geojson", driver="GeoJSON")
 
-# Biomes (via TerraBrasilis WFS)
+# Biomes (via TerraBrasilis WFS) — NOTE: bdq/ows returns 404 as of 2026-10-08; use the IBGE download instead
 biomes = gpd.read_file(
     "https://terrabrasilis.dpi.inpe.br/geoserver/bdq/ows"
     "?service=WFS&version=2.0.0&request=GetFeature"
