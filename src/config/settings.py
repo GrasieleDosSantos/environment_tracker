@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     langfuse_secret_key: str = Field(default="", repr=False)
     langfuse_host: str = Field(default="https://cloud.langfuse.com")
 
+    # Basemaps — CARTO requires a key since 2026-09-25 (free: carto.com/basemaps/apikey).
+    # Without one, maps fall back to OpenStreetMap tiles.
+    carto_basemaps_api_key: str = Field(default="", repr=False)
+
     # App
     data_freshness_warning_hours: int = Field(
         default=12, description="Warn in conversation if data older than this"

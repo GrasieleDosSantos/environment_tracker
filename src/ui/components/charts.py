@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+from src.ui.components.basemap import get_basemap
 from src.ui.styles import PALETTE
 
 # ------------------------------------------------------------------ #
@@ -251,14 +252,25 @@ def spatial_heatmap(
     )
 
     subtitle = f"<br><sup style='color:{PALETTE['text_muted']}'>Fonte / Source: {source}</sup>" if source else ""
+    basemap = get_basemap()
     fig.update_layout(
         title=dict(
             text=title + subtitle,
             font=dict(**_FONT, size=15),
             x=0.01,
         ),
+        # Built-in "carto-positron" style uses keyless CARTO tiles, which now
+        # return an "API KEY REQUIRED" placeholder — supply the tiles ourselves.
         mapbox=dict(
-            style="carto-positron",
+            style="white-bg",
+            layers=[
+                dict(
+                    below="traces",
+                    sourcetype="raster",
+                    source=basemap.tile_urls(),
+                    sourceattribution=basemap.attribution,
+                )
+            ],
             center=dict(lat=-14.24, lon=-51.93),
             zoom=3.5,
         ),
