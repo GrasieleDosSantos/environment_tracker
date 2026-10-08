@@ -11,6 +11,7 @@ Run manually with:
 from __future__ import annotations
 
 import os
+from datetime import date, timedelta
 
 import pytest
 
@@ -55,10 +56,13 @@ class TestDETERContract:
 
         async def _fetch():
             async with DETERClient() as client:
-                return await client.fetch_recent_alerts(days=7, count=10)
+                return await client.fetch_alerts_by_region(
+                    since=date.today() - timedelta(days=30), count=10
+                )
 
         alerts = asyncio.run(_fetch())
-        assert len(alerts) > 0, "Expected at least one DETER alert in the last 7 days"
+        # DETER publishes with a lag of up to ~2 weeks, so a 7-day window can be empty
+        assert len(alerts) > 0, "Expected at least one DETER alert in the last 30 days"
 
     @_skip_on_network_error
     def test_deter_alert_has_required_fields(self):
@@ -67,7 +71,9 @@ class TestDETERContract:
 
         async def _fetch():
             async with DETERClient() as client:
-                return await client.fetch_recent_alerts(days=30, count=5)
+                return await client.fetch_alerts_by_region(
+                    since=date.today() - timedelta(days=30), count=5
+                )
 
         alerts = asyncio.run(_fetch())
         if not alerts:
@@ -80,12 +86,21 @@ class TestDETERContract:
 
     @_skip_on_network_error
     def test_deter_cerrado_layer_accessible(self):
-        from src.services.inpe_integration.deter_client import DETERCerradoClient
+        from src.config.settings import get_settings
+        from src.services.inpe_integration.deter_client import (
+            _DETER_BIOME_LAYERS,
+            DETERClient,
+        )
         import asyncio
 
+        endpoint = get_settings().inpe_deter_cerrado_endpoint
+        layer = _DETER_BIOME_LAYERS["cerrado"]
+
         async def _fetch():
-            async with DETERCerradoClient() as client:
-                return await client.fetch_recent_alerts(days=30, count=5)
+            async with DETERClient(endpoint=endpoint, layer=layer) as client:
+                return await client.fetch_alerts_by_region(
+                    since=date.today() - timedelta(days=30), count=5
+                )
 
         alerts = asyncio.run(_fetch())
         # May be empty in off-season; just verify no exception was raised
@@ -158,11 +173,11 @@ class TestPRODESContract:
 class TestFOGOContract:
     @_skip_on_network_error
     def test_fogo_48h_layer_returns_hotspots(self):
-        from src.services.inpe_integration.fogo_client import FogoClient
+        from src.services.inpe_integration.fogo_client import FOGOClient
         import asyncio
 
         async def _fetch():
-            async with FogoClient() as client:
+            async with FOGOClient() as client:
                 return await client.fetch_current_hotspots(count=10)
 
         hotspots = asyncio.run(_fetch())
@@ -170,11 +185,11 @@ class TestFOGOContract:
 
     @_skip_on_network_error
     def test_fogo_hotspot_has_coordinates(self):
-        from src.services.inpe_integration.fogo_client import FogoClient
+        from src.services.inpe_integration.fogo_client import FOGOClient
         import asyncio
 
         async def _fetch():
-            async with FogoClient() as client:
+            async with FOGOClient() as client:
                 return await client.fetch_current_hotspots(count=5)
 
         hotspots = asyncio.run(_fetch())
