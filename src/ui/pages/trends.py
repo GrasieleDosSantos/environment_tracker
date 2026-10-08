@@ -202,19 +202,18 @@ def _load_prodes_annual(
     start_year: int,
     end_year: int,
 ) -> list[dict]:
-    """Load PRODES annual deforestation for the given biomes via TerraBrasilis WFS.
+    """Load exact PRODES annual deforestation totals for the given biomes.
 
     Returns serialisable dicts with keys matching PRODESData fields.
     biome_ids is a tuple (hashable) so @st.cache_data can key on it.
     """
-    from src.services.inpe_integration.prodes_client import fetch_prodes_for_biomes
+    from src.services.inpe_integration.prodes_dashboard import fetch_prodes_annual_totals
     try:
-        records = fetch_prodes_for_biomes(
+        records = fetch_prodes_annual_totals(
             biome_ids=list(biome_ids),
             state=state,
             start_year=start_year,
             end_year=end_year,
-            count=5000,
         )
         return [r.model_dump() for r in records]
     except Exception:

@@ -76,10 +76,11 @@ def _detect_language(text: str) -> tuple[str, int]:
 # Geographic extraction                                                 #
 # ------------------------------------------------------------------ #
 
-# Build lookup: lower-case full state name / sigla → UF code
+# Build lookup: lower-case full state name → UF code. Siglas are matched
+# separately and case-sensitively: lower-case "to", "go", "am", "se", "es"
+# etc. are ordinary English/Portuguese words, not states.
 _STATE_LOOKUP: dict[str, str] = {}
 for _code, _name in STATES.items():
-    _STATE_LOOKUP[_code.lower()] = _code
     _STATE_LOOKUP[_name.lower()] = _code
 
 # Biome keyword map (PT + EN)
@@ -128,6 +129,9 @@ def _extract_states(text: str) -> tuple[list[str], bool, list[str]]:
         if re.search(r"\b" + re.escape(key) + r"\b", text_lower):
             if code not in found:
                 found.append(code)
+    for code in STATES:
+        if re.search(r"\b" + code + r"\b", text) and code not in found:
+            found.append(code)
 
     # Only check for ambiguous terms when no clear state was already found.
     # Also require word-boundary so "rio" does not match inside "período".

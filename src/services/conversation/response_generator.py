@@ -140,11 +140,12 @@ def format_deforestation_detail(alerts: list) -> str:
     return "\n".join(lines)
 
 
-def format_prodes_detail(records: list) -> str:
+def format_prodes_detail(records: list, rates: dict[int, float] | None = None) -> str:
     """Summarise PRODES annual deforestation records for the LLM prompt.
 
     Produces a year-by-biome table so the LLM can discuss trends and
-    compare biomes across years.
+    compare biomes across years. *rates* (official Legal Amazon rates,
+    {year: km²}) are appended as a separate table when given.
     """
     if not records:
         return "*Sem dados PRODES disponíveis / No PRODES data available.*"
@@ -185,23 +186,25 @@ def format_prodes_detail(records: list) -> str:
             row += " |"
             lines.append(row)
 
-    # Warn when any year hit the record cap (partial sample)
-    year_counts: dict[int, int] = {}
-    for r in records:
-        if r.year is not None:
-            year_counts[r.year] = year_counts.get(r.year, 0) + 1
-    capped_years = [yr for yr, n in year_counts.items() if n >= 5000]
-
-    lines += [""]
-    if capped_years:
-        lines.append(
-            f"*⚠️ Totais baseados em amostra parcial (máx. 5 000 registros/ano) "
-            f"para {', '.join(str(y) for y in sorted(capped_years))}. "
-            f"Tendência direcional é confiável; valores absolutos são aproximados. "
-            f"/ Totals based on a partial sample (max 5 000 records/year) for "
-            f"{', '.join(str(y) for y in sorted(capped_years))}. "
-            f"Directional trend is reliable; absolute values are approximate.*"
-        )
+    lines += [
+        "",
+        "*Incremento anual mapeado por bioma (ano PRODES: ago–jul). "
+        "/ Annual mapped increment per biome (PRODES year: Aug–Jul).*",
+    ]
+    if rates:
+        lines += [
+            "",
+            "**Taxa oficial PRODES — Amazônia Legal (km²) / Official PRODES rate — Legal Amazon (km²)**",
+            "*Valor oficial divulgado pelo INPE; inclui correção de cobertura de nuvens e abrange os 9 "
+            "estados da Amazônia Legal, por isso costuma ser maior que o incremento do bioma. / Official INPE "
+            "figure; includes cloud-cover correction and covers the 9 Legal Amazon states, so it is "
+            "usually higher than the biome increment.*",
+            "",
+            "| Ano | Taxa (km²) |",
+            "|-----|------------|",
+        ]
+        lines += [f"| {yr} | {km2:,.0f} |" for yr, km2 in sorted(rates.items(), reverse=True)]
+        lines.append("")
     lines.append(
         "*Fonte: PRODES/INPE — dados anuais, atualização ~novembro. "
         "Source: PRODES/INPE — annual data, updated ~November.*"
