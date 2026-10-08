@@ -100,14 +100,20 @@ def get_filter_state() -> FilterState:
     raw = st.session_state[_SESSION_KEY]
     if isinstance(raw, FilterState):
         return raw
+    # After a redeploy/hot reload, sessions still hold an instance of the
+    # *previous* FilterState class, so isinstance() fails — rebuild from fields.
+    if isinstance(raw, BaseModel):
+        raw = raw.model_dump()
     # Migrate legacy dict format from app.py initialisation
-    return FilterState(
+    fs = FilterState(
         states=raw.get("states", [raw["state_code"]] if raw.get("state_code") else []),
         biomes=raw.get("biomes", [raw["biome"]] if raw.get("biome") else []),
         date_preset=raw.get("date_preset", "last_30_days"),
         date_start=raw.get("date_start"),
         date_end=raw.get("date_end"),
     )
+    _save_filter_state(fs)
+    return fs
 
 
 def _save_filter_state(fs: FilterState) -> None:
