@@ -289,7 +289,7 @@ def _llm_extract_entities(text: str, missing: set[str]) -> dict:
                 LLMMessage.user(f"Extract these fields: {fields_list}\n\nQuery: {text}"),
             ],
             temperature=0,
-            max_tokens=150,
+            max_completion_tokens=150,
         )
         content = response.content.strip()
         # Strip markdown code fences if the model adds them

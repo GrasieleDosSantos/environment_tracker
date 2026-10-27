@@ -323,9 +323,9 @@ def _scope_to_prodes_years(scope: str | None) -> int:
 def _call_llm(
     messages: list[LLMMessage],
     temperature: float = 0.3,
-    max_tokens: int = 1024,
+    max_completion_tokens: int = 1024,
 ) -> LLMResponse:
-    return get_llm_provider().chat(messages, temperature=temperature, max_tokens=max_tokens)
+    return get_llm_provider().chat(messages, temperature=temperature, max_completion_tokens=max_completion_tokens)
 
 
 # ------------------------------------------------------------------ #
