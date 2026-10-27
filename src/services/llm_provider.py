@@ -80,7 +80,7 @@ class LLMProvider(ABC):
         self,
         messages: list[LLMMessage],
         temperature: float = 0.3,
-        max_tokens: int = 1024,
+        max_completion_tokens: int = 1024,
         **kwargs: Any,
     ) -> LLMResponse:
         """Send a list of chat messages and return a normalised response."""
