@@ -125,10 +125,11 @@ class OpenAIProvider(LLMProvider):
         **kwargs: Any,
     ) -> LLMResponse:
         payload = [m.to_dict() for m in messages]
+        # ``temperature`` is intentionally not forwarded: the configured model
+        # only accepts the default value (1) and rejects anything else.
         completion = self._client.chat.completions.create(
             model=self._model,
             messages=payload,  # type: ignore[arg-type]
-            temperature=temperature,
             max_completion_tokens=max_completion_tokens,
             **kwargs,
         )
