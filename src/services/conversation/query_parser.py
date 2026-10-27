@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import date
 
 from src.config.constants import BIOMES, STATE_CODES, STATES
 
@@ -35,6 +36,7 @@ class ParsedQuery:
     biomes: list[str] = field(default_factory=list)       # biome IDs e.g. ["amazonia"]
     metrics: list[str] = field(default_factory=list)      # "fire", "deforestation", "vegetation"
     temporal_scope: str | None = None       # e.g. "last_7_days", "last_30_days", "last_year"
+    target_year: int | None = None          # explicit calendar year, e.g. "in 2026" → 2026
     needs_clarification: bool = False
     clarification_options: list[str] = field(default_factory=list)
 
@@ -236,6 +238,26 @@ def _extract_temporal(text: str) -> str | None:
     return None
 
 
+_YEAR_RE = re.compile(r"(?<![\d.,])(19[89]\d|20\d{2})(?![\d.,])(?!\s*(?:km|ha|%))")
+_THIS_YEAR_RE = re.compile(r"\b(esse?\s*ano|este\s*ano|this\s*year|ano\s*atual)\b", re.I)
+
+
+def _extract_year(text: str, current_year: int | None = None) -> int | None:
+    """Return an explicit calendar year mentioned in *text* ("in 2026", "em 2024").
+
+    "this year" / "este ano" resolve to the current year. Future years and
+    numbers followed by a unit (e.g. "2000 km²") are ignored.
+    """
+    current_year = current_year or date.today().year
+    for match in _YEAR_RE.finditer(text):
+        year = int(match.group(1))
+        if year <= current_year:
+            return year
+    if _THIS_YEAR_RE.search(text):
+        return current_year
+    return None
+
+
 # ------------------------------------------------------------------ #
 # LLM fallback — batched extraction                                     #
 # ------------------------------------------------------------------ #
@@ -367,6 +389,7 @@ def parse_query(text: str) -> ParsedQuery:
     biomes = _extract_biomes(text)
     metrics = _extract_metrics(text)
     temporal_scope = _extract_temporal(text)
+    target_year = _extract_year(text)
     lang, lang_confidence = _detect_language(text)
 
     # --- Determine gaps ---
@@ -379,7 +402,7 @@ def parse_query(text: str) -> ParsedQuery:
         missing.add("biomes")
     if not metrics:
         missing.add("metrics")
-    if temporal_scope is None:
+    if temporal_scope is None and target_year is None:
         missing.add("temporal_scope")
 
     # --- Pass 2: LLM fallback (one call for all gaps) ---
@@ -396,6 +419,7 @@ def parse_query(text: str) -> ParsedQuery:
         biomes=biomes,
         metrics=metrics or ["fire", "deforestation"],
         temporal_scope=temporal_scope,
+        target_year=target_year,
         needs_clarification=needs_clarification,
         clarification_options=clarification_options,
     )
