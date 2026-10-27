@@ -15,6 +15,7 @@ from src.services.conversation.query_parser import (
     _extract_metrics,
     _extract_states,
     _extract_temporal,
+    _extract_year,
     parse_query,
 )
 
@@ -223,3 +224,34 @@ class TestStateCodeCase:
     def test_uppercase_codes_still_match(self):
         states, _, _ = _extract_states("queimadas em TO e GO")
         assert set(states) == {"TO", "GO"}
+
+
+# ------------------------------------------------------------------ #
+# Explicit year extraction                                              #
+# ------------------------------------------------------------------ #
+
+class TestExtractYear:
+    @pytest.mark.parametrize("text,expected", [
+        ("deforestation rate in the Cerrado in 2026", 2026),
+        ("desmatamento no Cerrado em 2024", 2024),
+        ("queimadas este ano", 2026),
+        ("fires this year", 2026),
+    ])
+    def test_year_extracted(self, text, expected):
+        assert _extract_year(text, current_year=2026) == expected
+
+    @pytest.mark.parametrize("text", [
+        "last 30 days",
+        "2000 km² cleared",
+        "1990 ha desmatados",
+        "deforestation in 2030",
+        "queimadas no Cerrado",
+    ])
+    def test_no_year(self, text):
+        assert _extract_year(text, current_year=2026) is None
+
+    def test_parse_query_sets_target_year(self):
+        pq = parse_query("Cerrado 2024")
+        assert pq.target_year == 2024
+        assert pq.biomes == ["cerrado"]
+        assert pq.temporal_scope is None

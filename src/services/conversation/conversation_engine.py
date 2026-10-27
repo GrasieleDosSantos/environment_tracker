@@ -18,7 +18,7 @@ Usage::
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from src.services.conversation.langfuse_wrapper import trace_llm_call
@@ -139,7 +139,6 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
     from src.services.analysis.aggregator import aggregate_multi_source
 
     try:
-        from datetime import date, timedelta
         from src.services.inpe_integration.fogo_client import (
             fetch_current_hotspots,
             fetch_fire_risk,
@@ -154,16 +153,22 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
         multi_states = pq.states if len(pq.states) > 1 else None
 
         today = date.today()
-        period_days = _scope_to_days(pq.temporal_scope)
-        start = today - timedelta(days=period_days)
+        period = _resolve_period(pq, today)
+        start, end = period.start, period.end
+        # Fire history is only available as "last N days" ending today.
+        fire_days = (end - start).days if end == today else 0
+        if pq.target_year:
+            use_fire_period = fire_days > 1
+        else:
+            use_fire_period = pq.temporal_scope not in (None, "last_1_day")
 
         # --- Fire hotspots ---
         hotspots_48h = fetch_current_hotspots(
             state=single_state, states=multi_states, count=5000
         )
-        if pq.temporal_scope and pq.temporal_scope != "last_1_day":
+        if use_fire_period:
             hotspots_period = fetch_fire_risk(
-                state=single_state, states=multi_states, days=min(period_days, 90)
+                state=single_state, states=multi_states, days=min(fire_days, 90)
             )
         else:
             hotspots_period = hotspots_48h
@@ -176,7 +181,7 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
                     state=single_state,
                     biome_ids=deter_biomes,
                     start=start,
-                    end=today,
+                    end=end,
                 )
             else:
                 # All requested biomes are non-DETER; skip DETER fetch entirely.
@@ -190,7 +195,7 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
                 state=single_state,
                 biome_ids=["amazonia", "cerrado"],
                 start=start,
-                end=today,
+                end=end,
             )
 
         # --- PRODES annual data ---
@@ -200,7 +205,7 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
         prodes_records: list = []
         prodes_rates: dict[int, float] = {}
         non_deter_biomes = [b for b in pq.biomes if b not in _DETER_COVERED_BIOMES]
-        long_term = period_days >= 365
+        long_term = period.long_term
         need_prodes = (
             "deforestation" in (pq.metrics or [])
             and (bool(non_deter_biomes) or long_term or (not pq.biomes and not alerts_raw))
@@ -217,18 +222,17 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
                 fetch_legal_amazon_rates,
                 fetch_prodes_annual_totals,
             )
-            years_back = _scope_to_prodes_years(pq.temporal_scope)
-            prodes_start = today.year - years_back
-            prodes_end = today.year - 1  # PRODES publishes previous year
             prodes_records = fetch_prodes_annual_totals(
                 biome_ids=prodes_biome_ids,
                 state=single_state,
-                start_year=prodes_start,
-                end_year=prodes_end,
+                start_year=period.prodes_start,
+                end_year=period.prodes_end,
             )
             if "amazonia" in prodes_biome_ids:
                 prodes_rates = fetch_legal_amazon_rates(
-                    start_year=prodes_start, end_year=prodes_end, state=single_state
+                    start_year=period.prodes_start,
+                    end_year=period.prodes_end,
+                    state=single_state,
                 )
 
         # --- Region label ---
@@ -249,15 +253,15 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
             fogo_hotspots_period=hotspots_period,
             region_label=region_label,
             period_start=start,
-            period_end=today,
+            period_end=end,
         )
 
-        period_label = f"{start:%d/%m/%Y} – {today:%d/%m/%Y}"
-        fire_period_label = (
-            f"período {period_label}"
-            if pq.temporal_scope and pq.temporal_scope != "last_1_day"
-            else "últimas 48h / last 48h"
-        )
+        period_label = f"{start:%d/%m/%Y} – {end:%d/%m/%Y}"
+        if use_fire_period:
+            fire_start = today - timedelta(days=min(fire_days, 90))
+            fire_period_label = f"período {fire_start:%d/%m/%Y} – {today:%d/%m/%Y}"
+        else:
+            fire_period_label = "últimas 48h / last 48h"
 
         return {
             "fire_count_48h": snapshot.fire_count_48h,
@@ -274,10 +278,52 @@ def _retrieve_data(pq: ParsedQuery) -> dict[str, Any]:
             "alerts": alerts_raw,
             "prodes_records": prodes_records,
             "prodes_rates": prodes_rates,
+            "prodes_pending_year": (
+                pq.target_year
+                if need_prodes and pq.target_year and pq.target_year > period.prodes_end
+                else None
+            ),
+            "prodes_latest_year": period.prodes_end,
         }
 
     except Exception:
         return {}
+
+
+@dataclass
+class _Period:
+    start: date
+    end: date
+    long_term: bool
+    prodes_start: int
+    prodes_end: int
+
+
+def _resolve_period(pq: ParsedQuery, today: date) -> _Period:
+    """Resolve the DETER window and PRODES year range for a parsed query.
+
+    An explicit year ("in 2026") covers Jan 1 – Dec 31 of that year, clipped
+    to today, and always pulls PRODES. PRODES year N (Aug N-1 – Jul N) is only
+    published around Nov/Dec of year N, so the range ends at the previous year.
+    """
+    latest_prodes = today.year - 1  # PRODES publishes previous year
+    if pq.target_year:
+        prodes_end = min(pq.target_year, latest_prodes)
+        return _Period(
+            start=date(pq.target_year, 1, 1),
+            end=min(date(pq.target_year, 12, 31), today),
+            long_term=True,
+            prodes_start=prodes_end - 2,
+            prodes_end=prodes_end,
+        )
+    period_days = _scope_to_days(pq.temporal_scope)
+    return _Period(
+        start=today - timedelta(days=period_days),
+        end=today,
+        long_term=period_days >= 365,
+        prodes_start=today.year - _scope_to_prodes_years(pq.temporal_scope),
+        prodes_end=latest_prodes,
+    )
 
 
 def _scope_to_days(scope: str | None) -> int:
@@ -395,8 +441,11 @@ class ConversationService:
             elif followup and ctx.get("last_featured_biomes"):
                 pq.biomes = ctx["last_featured_biomes"]
 
-        if pq.temporal_scope is None and ctx.get("last_temporal_scope"):
-            pq.temporal_scope = ctx["last_temporal_scope"]
+        if pq.temporal_scope is None and pq.target_year is None:
+            if ctx.get("last_target_year"):
+                pq.target_year = ctx["last_target_year"]
+            elif ctx.get("last_temporal_scope"):
+                pq.temporal_scope = ctx["last_temporal_scope"]
 
         # Retrieve INPE data
         data = _retrieve_data(pq)
@@ -427,6 +476,19 @@ class ConversationService:
         if "deforestation" in pq.metrics and prodes_records:
             data_block += "\n\n" + format_prodes_detail(
                 prodes_records, rates=data.get("prodes_rates")
+            )
+        pending_year = data.get("prodes_pending_year")
+        if pending_year:
+            latest = data.get("prodes_latest_year")
+            data_block += (
+                f"\n\nNota PRODES / PRODES note: a taxa PRODES {pending_year} "
+                f"(ago/{pending_year - 1}–jul/{pending_year}) ainda não foi publicada; "
+                f"o INPE costuma divulgar a estimativa preliminar em novembro/dezembro. "
+                f"Taxa mais recente disponível: PRODES {latest}. / "
+                f"The PRODES {pending_year} rate (Aug {pending_year - 1}–Jul {pending_year}) "
+                f"is not yet published; INPE usually releases the preliminary estimate in "
+                f"Nov/Dec. Latest available rate: PRODES {latest} — report it as the most "
+                f"recent annual figure."
             )
 
         # 4. Compose message list: system + history + data context + new user msg
@@ -464,6 +526,7 @@ class ConversationService:
             "last_biomes": pq.biomes,
             "last_metrics": pq.metrics,
             "last_temporal_scope": pq.temporal_scope,
+            "last_target_year": pq.target_year,
             "language": pq.language,
             "last_featured_states": featured.get("states", []),
             "last_featured_biomes": featured.get("biomes", []),
