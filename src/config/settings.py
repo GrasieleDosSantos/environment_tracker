@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # LLM
     openai_api_key: str = Field(default="", description="OpenAI API key", repr=False)
-    openai_model: str = Field(default="gpt-4o", description="OpenAI model identifier")
+    openai_model: str = Field(default="gpt-6.1-sol", description="OpenAI model identifier")
 
     # INPE endpoints
     inpe_deter_endpoint: str = Field(
