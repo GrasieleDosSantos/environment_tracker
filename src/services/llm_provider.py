@@ -121,7 +121,7 @@ class OpenAIProvider(LLMProvider):
         self,
         messages: list[LLMMessage],
         temperature: float = 0.3,
-        max_tokens: int = 1024,
+        max_completion_tokens: int = 1024,
         **kwargs: Any,
     ) -> LLMResponse:
         payload = [m.to_dict() for m in messages]
@@ -129,7 +129,7 @@ class OpenAIProvider(LLMProvider):
             model=self._model,
             messages=payload,  # type: ignore[arg-type]
             temperature=temperature,
-            max_tokens=max_tokens,
+            max_completion_tokens=max_completion_tokens,
             **kwargs,
         )
         choice = completion.choices[0]
